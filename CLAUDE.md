@@ -50,6 +50,24 @@ All commands assume `uv` is on PATH (installed to `~/.local/bin`).
 
 Don't add Garmin password handling to `app.py` — keep auth concerns inside `fitme/garmin.py` and `fitme/login.py`.
 
+## Documentation discipline — keep CLAUDE.md current
+
+**Every code change ships with the matching CLAUDE.md update in the same turn.** Documentation is not a follow-up task; it lives next to the change.
+
+When you (Claude) add a feature, a new module, a new entry point, a new command, a new dependency, a new env var, a new convention, or change an existing one — update the relevant `CLAUDE.md` *before declaring the task done*. Treat an out-of-date `CLAUDE.md` the same way you'd treat broken code.
+
+What must be reflected in `CLAUDE.md`:
+- **New applications or entry points** (CLIs, dashboards, scripts, services) — what they do, how to run them.
+- **Stack changes** — added/removed dependencies, Python version bumps, package-manager switches.
+- **New commands** in the "Commands" table — `uv add`, `uv run …`, lint, test, deploy, anything you'd want to remember.
+- **New env vars** — also mirrored into `.env.example` with a short comment.
+- **Architectural decisions** — auth flow, data flow, integration patterns, module layout.
+- **Conventions** — coding rules, logging, error handling, naming.
+
+**Sub-folder `CLAUDE.md` files** — if a sub-folder (e.g. `src/fitme/integrations/`, `infra/`, `docs/`) grows complex enough to need its own `CLAUDE.md`, create one and treat it with the same discipline: it documents that sub-tree, and changes to that sub-tree must update it in the same turn. The root `CLAUDE.md` stays the project-wide source of truth; sub-folder files cover details too specific to belong in the root. Link the sub-folder file from the root's "Layout" section so future Claude instances discover it.
+
+When updating: edit in-place rather than appending notes at the bottom. Remove sections that no longer apply. Stale guidance is worse than missing guidance — it actively misleads.
+
 ## Git / VCS authorship
 
 **Every commit, pull request, merge request, branch description and release note belongs to the user only: `Bruno Strumendo <strumendo@gmail.com>`.**
