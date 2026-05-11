@@ -32,3 +32,33 @@ def get_sleep(conn: sqlite3.Connection, day: date) -> dict | None:
 
 def get_weight(conn: sqlite3.Connection, day: date) -> dict | None:
     return _one(conn, "weight", day)
+
+
+def _range(
+    conn: sqlite3.Connection, table: str, start: date, end: date
+) -> list[dict]:
+    rows = conn.execute(
+        f"SELECT * FROM {table} WHERE date BETWEEN ? AND ? ORDER BY date",  # noqa: S608 — table name is a code constant
+        (start.isoformat(), end.isoformat()),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def daily_summary_range(
+    conn: sqlite3.Connection, start: date, end: date
+) -> list[dict]:
+    return _range(conn, "daily_summary", start, end)
+
+
+def heart_rate_range(
+    conn: sqlite3.Connection, start: date, end: date
+) -> list[dict]:
+    return _range(conn, "heart_rate", start, end)
+
+
+def sleep_range(conn: sqlite3.Connection, start: date, end: date) -> list[dict]:
+    return _range(conn, "sleep", start, end)
+
+
+def weight_range(conn: sqlite3.Connection, start: date, end: date) -> list[dict]:
+    return _range(conn, "weight", start, end)

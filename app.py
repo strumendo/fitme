@@ -1,8 +1,14 @@
-"""Streamlit dashboard entry point — "Today" view.
+"""Streamlit dashboard entry point — "Today" landing page.
 
-Reads the day's data from the local SQLite DB. If a date has no row, offers a
-one-click button that calls the ingest pipeline for that date and reruns.
-Background ingest happens manually via ``uv run python -m fitme.ingest``.
+The fitme dashboard is a multi-page Streamlit app:
+
+- This file (``app.py``) is the landing "Today" page — single-day snapshot.
+- ``pages/2_Trends.py`` — multi-day line charts and period deltas.
+
+Both pages read from the local SQLite DB. If a date has no row, the Today
+page offers a one-click button that calls the ingest pipeline for that date
+and reruns. Background ingest still happens manually via
+``uv run python -m fitme.ingest``.
 
 Run with::
 
@@ -35,8 +41,8 @@ from fitme.queries import (
 setup_logging()
 logger = logging.getLogger(__name__)
 
-st.set_page_config(page_title="fitme", page_icon=":runner:", layout="wide")
-st.title("fitme")
+st.set_page_config(page_title="fitme — Today", page_icon=":runner:", layout="wide")
+st.title("Today")
 
 selected = st.date_input("Date", value=date.today(), max_value=date.today())
 

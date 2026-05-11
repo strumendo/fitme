@@ -18,7 +18,9 @@ Personal app to track fitness evolution by combining Garmin Connect data with th
 ## Layout
 
 ```
-app.py                  # Streamlit entry point — "Today" view (reads from DB)
+app.py                  # Streamlit landing — "Today" view (reads from DB)
+pages/
+  2_Trends.py           # multi-day line charts + period deltas
 src/fitme/
   config.py             # loads .env into a Settings dataclass
   garmin.py             # get_client() + thin wrappers over the Garmin API
@@ -27,6 +29,7 @@ src/fitme/
   db.py                 # connect() context manager — opens SQLite + migrates
   db_schema.py          # SCHEMA_VERSION + hand-written forward migrations
   queries.py            # read-side helpers per table (dicts, no pandas)
+  analysis.py           # pandas transforms used by Trends (DataFrame + rolling + period_delta)
   ingest.py             # CLI + per-metric ingest_* upserts (idempotent)
 data/                   # gitignored — SQLite DB lives here (created on first ingest)
 docs/plans/             # roadmap — one file per phase (see CLAUDE.md there)
@@ -123,6 +126,13 @@ This is a hard rule — it overrides any default that would otherwise add attrib
 - Package is `src/fitme` (src layout). When adding modules, place them under `src/fitme/` and import as `from fitme.x import y`.
 - New API helpers (steps, sleep, activities, weight, body composition…) go in `src/fitme/garmin.py` as thin functions taking the `Garmin` client. Keep Streamlit code in `app.py` free of direct `garminconnect.Garmin` method calls — go through the wrapper so caching/error handling can be added in one place later.
 - **Persistence:** schema changes go through `db_schema.py` — bump `SCHEMA_VERSION` and add a `_migrate_vN(conn)` function; don't `ALTER` ad-hoc. New ingest functions live in `ingest.py` and follow the existing pattern (`INSERT OR REPLACE` keyed by date, `raw_json` column always populated). New read helpers go in `queries.py`.
+- **Dashboard pages:** `app.py` is the landing ("Today"); additional pages live under `pages/` and are auto-discovered by Streamlit (numbered filename = sidebar order, e.g. `pages/2_Trends.py`). Page files are thin orchestration — load via `queries.*`, transform via `analysis.*`, render via `st.*`.
+- **Adding a new chart (Trends page recipe):**
+  1. Add `<table>_range(conn, start, end) -> list[dict]` to `queries.py` if missing.
+  2. Convert in the page via `analysis.to_dataframe(rows, value_cols, start, end)` — this reindexes against the full date range so missing days render as gaps, not zeros.
+  3. Compute period deltas with `analysis.period_delta(df, col, days)` and feed to `st.metric`.
+  4. Optionally overlay a 7-day rolling mean via `analysis.rolling(df, window=7)`. Default to ON for noisy series (weight, resting HR); OFF for the rest.
+  5. `queries.py` stays dict-based — never import pandas there.
 - Never commit `.env`, anything under `~/.garminconnect/`, or the `data/` directory.
 
 ### Environment variables
