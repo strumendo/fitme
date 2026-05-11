@@ -166,6 +166,9 @@ venv.bak/
 
 # mkdocs documentation
 /site
+/docs
+CLAUDE.md
+.claude
 
 # mypy
 .mypy_cache/
