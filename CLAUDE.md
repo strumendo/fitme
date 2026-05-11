@@ -18,17 +18,40 @@ Personal app to track fitness evolution by combining Garmin Connect data with th
 ## Layout
 
 ```
-app.py                  # Streamlit entry point
+app.py                  # Streamlit entry point — "Today" view (reads from DB)
 src/fitme/
   config.py             # loads .env into a Settings dataclass
   garmin.py             # get_client() + thin wrappers over the Garmin API
   login.py              # one-off interactive login (handles MFA)
   logging_config.py     # setup() called once per entry point
+  db.py                 # connect() context manager — opens SQLite + migrates
+  db_schema.py          # SCHEMA_VERSION + hand-written forward migrations
+  queries.py            # read-side helpers per table (dicts, no pandas)
+  ingest.py             # CLI + per-metric ingest_* upserts (idempotent)
+data/                   # gitignored — SQLite DB lives here (created on first ingest)
 docs/plans/             # roadmap — one file per phase (see CLAUDE.md there)
 pyproject.toml          # deps + hatchling build of src/fitme
 .python-version         # 3.12
 .env.example            # template — copy to .env locally
 ```
+
+## Data flow
+
+Garmin Connect is **not** queried by the dashboard on every render. Instead:
+
+1. **Ingest** (manual, via the CLI) pulls Garmin data into the local SQLite DB
+   at `data/fitme.db`. Each metric is upserted by date — re-running is safe.
+2. **Dashboard** (`app.py` and future pages) reads from the DB via
+   `fitme.queries`. When a selected date has no row, the UI shows a banner
+   with a "Fetch from Garmin for <date>" button that triggers an ad-hoc
+   ingest for just that date.
+3. The full Garmin payload is preserved in each table's `raw_json` column so
+   later schema versions can backfill new typed fields without re-hitting the
+   API.
+
+Schema migrations live in `db_schema.py`. `db.connect()` reads
+`schema_version`, compares it to `SCHEMA_VERSION`, and applies any missing
+forward migrations on every connect. No down-migrations; no ORM.
 
 ## Roadmap
 
@@ -51,6 +74,10 @@ All commands assume `uv` is on PATH (installed to `~/.local/bin`).
 | Add a dev-only dep | `uv add --group dev <pkg>` |
 | Run the dashboard | `uv run streamlit run app.py` |
 | One-off Garmin login (handles MFA, caches tokens) | `uv run python -m fitme.login` |
+| Ingest the last 30 days into SQLite | `uv run python -m fitme.ingest --since 30d` |
+| Ingest a specific range | `uv run python -m fitme.ingest --from 2026-04-01 --to 2026-04-30` |
+| Ingest a single day | `uv run python -m fitme.ingest --date 2026-05-10` |
+| Ingest a subset of metrics | `uv run python -m fitme.ingest --since 7d --metrics summary,sleep` |
 | Ad-hoc Python in the env | `uv run python -c '...'` |
 | Lint | `uv run ruff check .` |
 
@@ -95,7 +122,20 @@ This is a hard rule — it overrides any default that would otherwise add attrib
 
 - Package is `src/fitme` (src layout). When adding modules, place them under `src/fitme/` and import as `from fitme.x import y`.
 - New API helpers (steps, sleep, activities, weight, body composition…) go in `src/fitme/garmin.py` as thin functions taking the `Garmin` client. Keep Streamlit code in `app.py` free of direct `garminconnect.Garmin` method calls — go through the wrapper so caching/error handling can be added in one place later.
-- Never commit `.env` or anything under `~/.garminconnect/`.
+- **Persistence:** schema changes go through `db_schema.py` — bump `SCHEMA_VERSION` and add a `_migrate_vN(conn)` function; don't `ALTER` ad-hoc. New ingest functions live in `ingest.py` and follow the existing pattern (`INSERT OR REPLACE` keyed by date, `raw_json` column always populated). New read helpers go in `queries.py`.
+- Never commit `.env`, anything under `~/.garminconnect/`, or the `data/` directory.
+
+### Environment variables
+
+The full list of recognised env vars (all loaded from `.env` via `dotenv`):
+
+| Var | Default | Purpose |
+| --- | --- | --- |
+| `GARMIN_EMAIL` | — | Garmin Connect login. Required for the first auth; cached tokens after. |
+| `GARMIN_PASSWORD` | — | Same. |
+| `GARMINTOKENS` | `~/.garminconnect` | Where the `garminconnect` lib caches OAuth tokens. |
+| `LOG_LEVEL` | `INFO` | Root logger level. |
+| `FITME_DB_PATH` | `data/fitme.db` | SQLite DB location. Relative paths resolve against the project root. |
 
 ### Logging — never use `print`
 

@@ -56,3 +56,17 @@ def daily_summary(client: Garmin, day: date | None = None) -> dict:
 
 def heart_rate(client: Garmin, day: date | None = None) -> dict:
     return client.get_heart_rates((day or date.today()).isoformat())
+
+
+def sleep(client: Garmin, day: date | None = None) -> dict:
+    return client.get_sleep_data((day or date.today()).isoformat())
+
+
+def body_composition(client: Garmin, day: date | None = None) -> dict:
+    """Return body composition for ``day``.
+
+    Garmin's response is ``{"totalAverage": {...}, "dateWeightList": [...]}``.
+    Callers typically read ``totalAverage`` for the per-day aggregate.
+    """
+    iso = (day or date.today()).isoformat()
+    return client.get_body_composition(iso)

@@ -5,7 +5,7 @@ for one phase. Status is tracked in the header of each file.
 
 | # | Phase | Status | File |
 | --- | --- | --- | --- |
-| 1 | Local persistence (SQLite) | not started | [01-persistence.md](01-persistence.md) |
+| 1 | Local persistence (SQLite) | in progress | [01-persistence.md](01-persistence.md) |
 | 2 | Time series + history view | not started | [02-time-series.md](02-time-series.md) |
 | 3 | Expanded Garmin metrics | not started | [03-more-garmin.md](03-more-garmin.md) |
 | 4 | Manual inputs — training + food | not started | [04-manual-inputs.md](04-manual-inputs.md) |
