@@ -23,10 +23,22 @@ src/fitme/
   config.py             # loads .env into a Settings dataclass
   garmin.py             # get_client() + thin wrappers over the Garmin API
   login.py              # one-off interactive login (handles MFA)
+  logging_config.py     # setup() called once per entry point
+docs/plans/             # roadmap — one file per phase (see CLAUDE.md there)
 pyproject.toml          # deps + hatchling build of src/fitme
 .python-version         # 3.12
 .env.example            # template — copy to .env locally
 ```
+
+## Roadmap
+
+Forward-looking work lives under [`docs/plans/`](docs/plans/README.md), one file
+per phase. Current order: persistence (SQLite) → time-series view → expanded
+Garmin metrics → manual inputs (training + food). When starting work on a
+phase, read its plan file and update its `Status` header from `not started` →
+`in progress`; mark it `done` only when the Acceptance checklist is met. Edit
+plans in place — see [`docs/plans/CLAUDE.md`](docs/plans/CLAUDE.md) for the
+maintenance rules specific to that folder.
 
 ## Commands
 
