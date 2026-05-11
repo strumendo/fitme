@@ -147,6 +147,9 @@ activemq-data/
 # SageMath parsed files
 *.sage.py
 
+# Local fitme SQLite DB
+data/
+
 # Environments
 .env
 .envrc
