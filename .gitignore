@@ -166,6 +166,7 @@ venv.bak/
 
 # mkdocs documentation
 /site
+/docs/git-project-commands
 
 # mypy
 .mypy_cache/
