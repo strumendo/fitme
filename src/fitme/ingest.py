@@ -222,6 +222,36 @@ def ingest_body_battery(client: Garmin, conn: sqlite3.Connection, day: date) -> 
     return True
 
 
+def _stress_bucket_seconds(payload: dict) -> tuple[int, int, int, int]:
+    """Derive (rest, low, medium, high) seconds from the intraday stress array.
+
+    Garmin's ``get_stress_data`` payload samples stress every 3 min as
+    ``[timestamp_ms, level]`` pairs in ``stressValuesArray``. Negative levels
+    are sentinels (-1 = asleep/resting, -2 = unmeasurable) so they're skipped.
+    Buckets follow Garmin's UI: 0–25 rest, 26–50 low, 51–75 medium, 76–100 high.
+    """
+    arr = payload.get("stressValuesArray") or []
+    if len(arr) < 2:
+        return 0, 0, 0, 0
+    interval = max(1, (arr[1][0] - arr[0][0]) // 1000)
+    rest = low = medium = high = 0
+    for entry in arr:
+        if not isinstance(entry, (list, tuple)) or len(entry) < 2:
+            continue
+        level = entry[1]
+        if not isinstance(level, (int, float)) or level < 0:
+            continue
+        if level <= 25:
+            rest += interval
+        elif level <= 50:
+            low += interval
+        elif level <= 75:
+            medium += interval
+        else:
+            high += interval
+    return rest, low, medium, high
+
+
 def ingest_stress(client: Garmin, conn: sqlite3.Connection, day: date) -> bool:
     try:
         payload = gconn.stress(client, day)
@@ -237,6 +267,7 @@ def ingest_stress(client: Garmin, conn: sqlite3.Connection, day: date) -> bool:
     if avg in (None, -1):
         logger.info("no stress data for %s", day)
         return False
+    rest_s, low_s, med_s, high_s = _stress_bucket_seconds(payload)
     conn.execute(
         """
         INSERT OR REPLACE INTO stress
@@ -248,10 +279,10 @@ def ingest_stress(client: Garmin, conn: sqlite3.Connection, day: date) -> bool:
             day.isoformat(),
             avg,
             payload.get("maxStressLevel"),
-            payload.get("restStressDuration"),
-            payload.get("lowStressDuration"),
-            payload.get("mediumStressDuration"),
-            payload.get("highStressDuration"),
+            rest_s,
+            low_s,
+            med_s,
+            high_s,
             json.dumps(payload),
             _now_iso(),
         ),
