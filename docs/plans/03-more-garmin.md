@@ -1,6 +1,6 @@
 # Phase 3 — Expanded Garmin metrics
 
-Status: in progress
+Status: done
 Last updated: 2026-05-12
 
 ## Goal
@@ -101,20 +101,23 @@ End of phase:
 
 ## Acceptance
 
-- [ ] Activities page lists recent activities with filtering by type and date
+- [x] Activities page lists recent activities with filtering by type and date
       range, and links each row to a detail expander showing the raw JSON.
-- [ ] Body battery, stress and HRV appear as line charts on the Trends page
+- [x] Body battery, stress and HRV appear as line charts on the Trends page
       with the same UX as Phase 2 metrics (rolling avg toggle, period delta).
-- [ ] Body composition appears on the Today page when data exists for the
+      HRV chart renders empty in practice — see Open questions.
+- [x] Body composition appears on the Today page when data exists for the
       selected date.
-- [ ] `uv run python -m fitme.ingest --since 30d --metrics all` populates all
-      tables introduced in this phase.
+- [x] `uv run python -m fitme.ingest --since 30d --metrics all` populates all
+      tables introduced in this phase (HRV stays empty — gap below).
 
 ## Open questions
 
-- Some metrics (HRV, body battery) may not be on the unofficial API or may
-  require specific device support. Probe each in implementation; if missing,
-  document the gap here and move on rather than blocking the phase.
+- **HRV gap (confirmed):** `get_hrv_data` returns an empty `{}` for every
+  date with the current device + account. `ingest_hrv` detects this and
+  logs `no hrv data for <day>`; the table stays empty and the Trends chart
+  renders as an empty series. Body battery and stress work fine. Revisit
+  if the device firmware / account starts producing HRV summaries.
 - Activities pagination — handled by `get_activities_by_date`, which paginates
   internally in 20-item batches. No per-run cap; one ingest call covers the
   whole window.
