@@ -19,9 +19,12 @@ from fitme.analysis import period_delta, rolling, to_dataframe
 from fitme.db import connect
 from fitme.logging_config import setup as setup_logging
 from fitme.queries import (
+    body_battery_range,
     daily_summary_range,
     heart_rate_range,
+    hrv_range,
     sleep_range,
+    stress_range,
     weight_range,
 )
 
@@ -74,6 +77,9 @@ with connect() as conn:
     hr_rows = heart_rate_range(conn, start, end)
     sleep_raw = sleep_range(conn, start, end)
     weight_rows = weight_range(conn, start, end)
+    bb_rows = body_battery_range(conn, start, end)
+    stress_rows = stress_range(conn, start, end)
+    hrv_rows = hrv_range(conn, start, end)
 
 summary_df = to_dataframe(
     summary_rows, ["steps", "calories_kcal", "active_minutes"], start, end
@@ -82,6 +88,9 @@ hr_df = to_dataframe(hr_rows, ["resting_bpm"], start, end)
 sleep_df = to_dataframe(sleep_raw, ["total_seconds"], start, end)
 sleep_df["sleep_hours"] = sleep_df["total_seconds"] / 3600.0
 weight_df = to_dataframe(weight_rows, ["weight_kg"], start, end)
+bb_df = to_dataframe(bb_rows, ["highest", "lowest", "charged", "drained"], start, end)
+stress_df = to_dataframe(stress_rows, ["avg_level", "max_level"], start, end)
+hrv_df = to_dataframe(hrv_rows, ["last_night_avg", "weekly_avg"], start, end)
 
 
 def _format(value: float | None, fmt: str, unit: str) -> str:
@@ -142,3 +151,22 @@ render_metric(
     rolling_default=False,
 )
 render_metric("Weight", weight_df, "weight_kg", "{:.1f}", "kg", rolling_default=True)
+render_metric(
+    "Body battery (peak)",
+    bb_df,
+    "highest",
+    "{:.0f}",
+    "",
+    rolling_default=True,
+)
+render_metric(
+    "Stress (avg)", stress_df, "avg_level", "{:.0f}", "", rolling_default=True
+)
+render_metric(
+    "HRV (last night)",
+    hrv_df,
+    "last_night_avg",
+    "{:.0f}",
+    "ms",
+    rolling_default=True,
+)

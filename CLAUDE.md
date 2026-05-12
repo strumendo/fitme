@@ -21,6 +21,7 @@ Personal app to track fitness evolution by combining Garmin Connect data with th
 app.py                  # Streamlit landing — "Today" view (reads from DB)
 pages/
   2_Trends.py           # multi-day line charts + period deltas
+  3_Activities.py       # activities list with type/date filters + raw payload
 src/fitme/
   config.py             # loads .env into a Settings dataclass
   garmin.py             # get_client() + thin wrappers over the Garmin API
@@ -56,6 +57,24 @@ Schema migrations live in `db_schema.py`. `db.connect()` reads
 `schema_version`, compares it to `SCHEMA_VERSION`, and applies any missing
 forward migrations on every connect. No down-migrations; no ORM.
 
+Current `SCHEMA_VERSION` is **2**. Tables:
+
+| Table | Key | Source | Notes |
+| --- | --- | --- | --- |
+| `daily_summary` | `date` | `get_user_summary` | steps, distance, calories, active minutes, floors |
+| `heart_rate` | `date` | `get_heart_rates` | resting / max / min / avg |
+| `sleep` | `date` | `get_sleep_data` | total + deep / light / REM / awake seconds |
+| `weight` | `date` | `get_body_composition` | weight + body fat / water / muscle / bone |
+| `body_battery` | `date` | `get_body_battery` | charged, drained, highest, lowest (derived from intraday array) |
+| `stress` | `date` | `get_stress_data` | avg / max + rest / low / medium / high seconds |
+| `hrv` | `date` | `get_hrv_data` | last-night avg, weekly avg, status |
+| `activities` | `activity_id` | `get_activities_by_date` | range-ingested, denormalised `date` from `startTimeLocal` |
+
+Per-day ingesters (everything except `activities`) loop day-by-day; `activities`
+is range-native — one call covers the whole window. The CLI's `--metrics` flag
+accepts any subset of: `summary`, `heart_rate`, `sleep`, `weight`,
+`body_battery`, `stress`, `hrv`, `activities`, or `all`.
+
 ## Roadmap
 
 Forward-looking work lives under [`docs/plans/`](docs/plans/README.md), one file
@@ -81,6 +100,7 @@ All commands assume `uv` is on PATH (installed to `~/.local/bin`).
 | Ingest a specific range | `uv run python -m fitme.ingest --from 2026-04-01 --to 2026-04-30` |
 | Ingest a single day | `uv run python -m fitme.ingest --date 2026-05-10` |
 | Ingest a subset of metrics | `uv run python -m fitme.ingest --since 7d --metrics summary,sleep` |
+| Ingest all metrics including Phase 3 ones | `uv run python -m fitme.ingest --since 30d --metrics all` |
 | Ad-hoc Python in the env | `uv run python -c '...'` |
 | Lint | `uv run ruff check .` |
 
@@ -125,7 +145,7 @@ This is a hard rule — it overrides any default that would otherwise add attrib
 
 - Package is `src/fitme` (src layout). When adding modules, place them under `src/fitme/` and import as `from fitme.x import y`.
 - New API helpers (steps, sleep, activities, weight, body composition…) go in `src/fitme/garmin.py` as thin functions taking the `Garmin` client. Keep Streamlit code in `app.py` free of direct `garminconnect.Garmin` method calls — go through the wrapper so caching/error handling can be added in one place later.
-- **Persistence:** schema changes go through `db_schema.py` — bump `SCHEMA_VERSION` and add a `_migrate_vN(conn)` function; don't `ALTER` ad-hoc. New ingest functions live in `ingest.py` and follow the existing pattern (`INSERT OR REPLACE` keyed by date, `raw_json` column always populated). New read helpers go in `queries.py`.
+- **Persistence:** schema changes go through `db_schema.py` — bump `SCHEMA_VERSION` and add a `_migrate_vN(conn)` function; don't `ALTER` ad-hoc. New ingest functions live in `ingest.py` and follow the existing pattern (`INSERT OR REPLACE` keyed by date — or by Garmin id for `activities` — with `raw_json` always populated). New read helpers go in `queries.py`. If a metric is range-native (one Garmin call covers many days, like `activities`), add the name to `RANGE_METRICS` and write `ingest_<metric>(client, conn, start, end)`; otherwise add a per-day function and entry in `INGESTERS` + `PER_DAY_METRICS`.
 - **Dashboard pages:** `app.py` is the landing ("Today"); additional pages live under `pages/` and are auto-discovered by Streamlit (numbered filename = sidebar order, e.g. `pages/2_Trends.py`). Page files are thin orchestration — load via `queries.*`, transform via `analysis.*`, render via `st.*`.
 - **Adding a new chart (Trends page recipe):**
   1. Add `<table>_range(conn, start, end) -> list[dict]` to `queries.py` if missing.

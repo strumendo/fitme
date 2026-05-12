@@ -1,7 +1,7 @@
 # Phase 3 — Expanded Garmin metrics
 
-Status: not started
-Last updated: 2026-05-10
+Status: in progress
+Last updated: 2026-05-12
 
 ## Goal
 
@@ -115,15 +115,18 @@ End of phase:
 - Some metrics (HRV, body battery) may not be on the unofficial API or may
   require specific device support. Probe each in implementation; if missing,
   document the gap here and move on rather than blocking the phase.
-- Activities pagination — confirm how `get_activities()` paginates and pick
-  a sane default per-run cap.
-- Should Activities live in its own page from day 1, or share Trends? Default:
-  own page (`pages/3_Activities.py`) — its data shape is different.
+- Activities pagination — handled by `get_activities_by_date`, which paginates
+  internally in 20-item batches. No per-run cap; one ingest call covers the
+  whole window.
+- Should Activities live in its own page from day 1, or share Trends?
+  Decision: own page — `pages/3_Activities.py`. Trends keeps the daily-series
+  charts.
 
 ## Cross-phase notes
 
-- After this phase, schema_version is likely v3 or v4. Update the root
-  `CLAUDE.md` "Data flow" / schema notes accordingly.
+- After this phase, `SCHEMA_VERSION` is `2` — sleep stages and body
+  composition were already in v1, so only one migration (v2) was needed,
+  adding `activities`, `body_battery`, `stress`, `hrv`.
 - Phase 4 (manual training log) will want to *match* manual sessions to
   Garmin `activities` rows. Keep that in mind when designing the activities
   table — `activity_id` as primary key (Garmin id) makes matching

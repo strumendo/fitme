@@ -25,16 +25,22 @@ import streamlit as st
 from fitme.db import connect
 from fitme.garmin import GarminAuthError, get_client
 from fitme.ingest import (
+    ingest_body_battery,
     ingest_daily_summary,
     ingest_heart_rate,
+    ingest_hrv,
     ingest_sleep,
+    ingest_stress,
     ingest_weight,
 )
 from fitme.logging_config import setup as setup_logging
 from fitme.queries import (
+    get_body_battery,
     get_daily_summary,
     get_heart_rate,
+    get_hrv,
     get_sleep,
+    get_stress,
     get_weight,
 )
 
@@ -60,6 +66,9 @@ def _fetch_from_garmin(day: date) -> bool:
         ingest_heart_rate(client, conn, day)
         ingest_sleep(client, conn, day)
         ingest_weight(client, conn, day)
+        ingest_body_battery(client, conn, day)
+        ingest_stress(client, conn, day)
+        ingest_hrv(client, conn, day)
     return True
 
 
@@ -68,8 +77,11 @@ with connect() as conn:
     hr = get_heart_rate(conn, selected)
     sleep_row = get_sleep(conn, selected)
     weight_row = get_weight(conn, selected)
+    bb_row = get_body_battery(conn, selected)
+    stress_row = get_stress(conn, selected)
+    hrv_row = get_hrv(conn, selected)
 
-if not any((summary, hr, sleep_row, weight_row)):
+if not any((summary, hr, sleep_row, weight_row, bb_row, stress_row, hrv_row)):
     st.info(f"No data stored for {selected.isoformat()}.")
     if st.button(f"Fetch from Garmin for {selected.isoformat()}"):
         with st.spinner("Fetching from Garmin..."):
@@ -118,8 +130,48 @@ with col4:
         st.metric("Weight", f"{weight_row['weight_kg']:.1f} kg")
         if weight_row["body_fat_pct"]:
             st.metric("Body fat", f"{weight_row['body_fat_pct']:.1f} %")
+        if weight_row["muscle_mass_kg"]:
+            st.metric("Muscle mass", f"{weight_row['muscle_mass_kg']:.1f} kg")
     else:
         st.caption("No weight stored.")
+
+col5, col6, col7 = st.columns(3)
+
+with col5:
+    st.subheader("Body battery")
+    if bb_row and (bb_row["highest"] is not None or bb_row["charged"] is not None):
+        if bb_row["highest"] is not None and bb_row["lowest"] is not None:
+            st.metric("High / Low", f"{bb_row['highest']} / {bb_row['lowest']}")
+        if bb_row["charged"] is not None and bb_row["drained"] is not None:
+            st.metric(
+                "Charged / Drained",
+                f"+{bb_row['charged']} / -{bb_row['drained']}",
+            )
+    else:
+        st.caption("No body battery stored.")
+
+with col6:
+    st.subheader("Stress")
+    if stress_row and stress_row["avg_level"] is not None:
+        st.metric("Avg stress", f"{stress_row['avg_level']}")
+        if stress_row["max_level"] is not None:
+            st.metric("Max stress", f"{stress_row['max_level']}")
+    else:
+        st.caption("No stress stored.")
+
+with col7:
+    st.subheader("HRV (overnight)")
+    if hrv_row and (
+        hrv_row["last_night_avg"] is not None or hrv_row["weekly_avg"] is not None
+    ):
+        if hrv_row["last_night_avg"] is not None:
+            st.metric("Last night", f"{hrv_row['last_night_avg']} ms")
+        if hrv_row["weekly_avg"] is not None:
+            st.metric("7-day avg", f"{hrv_row['weekly_avg']} ms")
+        if hrv_row["status"]:
+            st.caption(f"Status: {hrv_row['status']}")
+    else:
+        st.caption("No HRV stored.")
 
 if summary and summary["raw_json"]:
     with st.expander("Raw daily-summary payload"):

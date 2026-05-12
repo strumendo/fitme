@@ -30,7 +30,26 @@ from fitme.logging_config import setup as setup_logging
 
 logger = logging.getLogger(__name__)
 
-METRICS: tuple[str, ...] = ("summary", "heart_rate", "sleep", "weight")
+METRICS: tuple[str, ...] = (
+    "summary",
+    "heart_rate",
+    "sleep",
+    "weight",
+    "body_battery",
+    "stress",
+    "hrv",
+    "activities",
+)
+PER_DAY_METRICS: tuple[str, ...] = (
+    "summary",
+    "heart_rate",
+    "sleep",
+    "weight",
+    "body_battery",
+    "stress",
+    "hrv",
+)
+RANGE_METRICS: tuple[str, ...] = ("activities",)
 
 
 def _now_iso() -> str:
@@ -170,11 +189,169 @@ def ingest_weight(client: Garmin, conn: sqlite3.Connection, day: date) -> bool:
     return True
 
 
+def ingest_body_battery(client: Garmin, conn: sqlite3.Connection, day: date) -> bool:
+    try:
+        payload = gconn.body_battery(client, day)
+    except Exception:
+        logger.exception("body_battery fetch failed for %s", day)
+        return False
+    entry = payload[0] if isinstance(payload, list) and payload else None
+    if not isinstance(entry, dict):
+        logger.info("no body_battery data for %s", day)
+        return False
+    values_array = entry.get("bodyBatteryValuesArray") or []
+    levels = [pair[1] for pair in values_array if isinstance(pair, (list, tuple)) and len(pair) >= 2 and isinstance(pair[1], (int, float))]
+    highest = max(levels) if levels else None
+    lowest = min(levels) if levels else None
+    conn.execute(
+        """
+        INSERT OR REPLACE INTO body_battery
+            (date, charged, drained, highest, lowest, raw_json, fetched_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            day.isoformat(),
+            entry.get("charged"),
+            entry.get("drained"),
+            highest,
+            lowest,
+            json.dumps(entry),
+            _now_iso(),
+        ),
+    )
+    return True
+
+
+def ingest_stress(client: Garmin, conn: sqlite3.Connection, day: date) -> bool:
+    try:
+        payload = gconn.stress(client, day)
+    except Exception:
+        logger.exception("stress fetch failed for %s", day)
+        return False
+    if not isinstance(payload, dict):
+        logger.info("no stress data for %s", day)
+        return False
+    avg = payload.get("avgStressLevel")
+    if avg is None:
+        avg = payload.get("averageStressLevel")
+    if avg in (None, -1):
+        logger.info("no stress data for %s", day)
+        return False
+    conn.execute(
+        """
+        INSERT OR REPLACE INTO stress
+            (date, avg_level, max_level, rest_seconds, low_seconds,
+             medium_seconds, high_seconds, raw_json, fetched_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            day.isoformat(),
+            avg,
+            payload.get("maxStressLevel"),
+            payload.get("restStressDuration"),
+            payload.get("lowStressDuration"),
+            payload.get("mediumStressDuration"),
+            payload.get("highStressDuration"),
+            json.dumps(payload),
+            _now_iso(),
+        ),
+    )
+    return True
+
+
+def ingest_hrv(client: Garmin, conn: sqlite3.Connection, day: date) -> bool:
+    try:
+        payload = gconn.hrv(client, day)
+    except Exception:
+        logger.exception("hrv fetch failed for %s", day)
+        return False
+    if not isinstance(payload, dict):
+        logger.info("no hrv data for %s", day)
+        return False
+    summary = payload.get("hrvSummary") or {}
+    if not summary.get("lastNightAvg") and not summary.get("weeklyAvg"):
+        logger.info("no hrv data for %s", day)
+        return False
+    conn.execute(
+        """
+        INSERT OR REPLACE INTO hrv
+            (date, weekly_avg, last_night_avg, last_night_5min_high, status,
+             raw_json, fetched_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            day.isoformat(),
+            summary.get("weeklyAvg"),
+            summary.get("lastNightAvg"),
+            summary.get("lastNight5MinHigh"),
+            summary.get("status"),
+            json.dumps(payload),
+            _now_iso(),
+        ),
+    )
+    return True
+
+
+def ingest_activities(
+    client: Garmin, conn: sqlite3.Connection, start: date, end: date
+) -> int:
+    """Fetch activities in ``[start, end]`` and upsert each by ``activityId``.
+
+    Returns the number of rows upserted. Range-based (unlike per-day ingesters)
+    because the Garmin endpoint is range-native and avoids re-paginating per day.
+    """
+    try:
+        payload = gconn.activities(client, start, end)
+    except Exception:
+        logger.exception("activities fetch failed for %s..%s", start, end)
+        return 0
+    if not isinstance(payload, list) or not payload:
+        logger.info("no activities in %s..%s", start, end)
+        return 0
+    written = 0
+    for item in payload:
+        if not isinstance(item, dict):
+            continue
+        activity_id = item.get("activityId")
+        start_time = item.get("startTimeLocal") or item.get("startTimeGMT")
+        if activity_id is None or not start_time:
+            continue
+        type_key = (item.get("activityType") or {}).get("typeKey")
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO activities
+                (activity_id, date, start_time, type, name, duration_s,
+                 distance_m, calories_kcal, avg_hr_bpm, max_hr_bpm,
+                 raw_json, fetched_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                int(activity_id),
+                str(start_time)[:10],
+                str(start_time),
+                type_key,
+                item.get("activityName"),
+                int(item["duration"]) if isinstance(item.get("duration"), (int, float)) else None,
+                item.get("distance"),
+                item.get("calories"),
+                int(item["averageHR"]) if isinstance(item.get("averageHR"), (int, float)) else None,
+                int(item["maxHR"]) if isinstance(item.get("maxHR"), (int, float)) else None,
+                json.dumps(item),
+                _now_iso(),
+            ),
+        )
+        written += 1
+    return written
+
+
 INGESTERS: dict[str, Callable[[Garmin, sqlite3.Connection, date], bool]] = {
     "summary": ingest_daily_summary,
     "heart_rate": ingest_heart_rate,
     "sleep": ingest_sleep,
     "weight": ingest_weight,
+    "body_battery": ingest_body_battery,
+    "stress": ingest_stress,
+    "hrv": ingest_hrv,
 }
 
 
@@ -185,16 +362,31 @@ def ingest_range(
     end: date,
     metrics: tuple[str, ...] = METRICS,
 ) -> int:
-    """Ingest ``metrics`` for each date in ``[start, end]``. Returns rows upserted."""
+    """Ingest ``metrics`` for each date in ``[start, end]``. Returns rows upserted.
+
+    Per-day metrics are looped day-by-day; range-native metrics (``activities``)
+    are fetched once over the full window.
+    """
     written = 0
+    per_day = tuple(m for m in metrics if m in PER_DAY_METRICS)
+    range_metrics = tuple(m for m in metrics if m in RANGE_METRICS)
+
     day = start
     while day <= end:
-        for name in metrics:
+        for name in per_day:
             if INGESTERS[name](client, conn, day):
                 written += 1
                 logger.info("ingested %s for %s", name, day)
         conn.commit()
         day += timedelta(days=1)
+
+    if "activities" in range_metrics:
+        rows = ingest_activities(client, conn, start, end)
+        if rows:
+            logger.info("ingested %d activities in %s..%s", rows, start, end)
+        written += rows
+        conn.commit()
+
     return written
 
 

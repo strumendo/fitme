@@ -34,6 +34,18 @@ def get_weight(conn: sqlite3.Connection, day: date) -> dict | None:
     return _one(conn, "weight", day)
 
 
+def get_body_battery(conn: sqlite3.Connection, day: date) -> dict | None:
+    return _one(conn, "body_battery", day)
+
+
+def get_stress(conn: sqlite3.Connection, day: date) -> dict | None:
+    return _one(conn, "stress", day)
+
+
+def get_hrv(conn: sqlite3.Connection, day: date) -> dict | None:
+    return _one(conn, "hrv", day)
+
+
 def _range(
     conn: sqlite3.Connection, table: str, start: date, end: date
 ) -> list[dict]:
@@ -62,3 +74,52 @@ def sleep_range(conn: sqlite3.Connection, start: date, end: date) -> list[dict]:
 
 def weight_range(conn: sqlite3.Connection, start: date, end: date) -> list[dict]:
     return _range(conn, "weight", start, end)
+
+
+def body_battery_range(
+    conn: sqlite3.Connection, start: date, end: date
+) -> list[dict]:
+    return _range(conn, "body_battery", start, end)
+
+
+def stress_range(conn: sqlite3.Connection, start: date, end: date) -> list[dict]:
+    return _range(conn, "stress", start, end)
+
+
+def hrv_range(conn: sqlite3.Connection, start: date, end: date) -> list[dict]:
+    return _range(conn, "hrv", start, end)
+
+
+def activities_range(
+    conn: sqlite3.Connection,
+    start: date,
+    end: date,
+    activity_type: str | None = None,
+) -> list[dict]:
+    """Return activities with start date in ``[start, end]``, newest first.
+
+    Optionally filtered by Garmin ``typeKey`` (e.g. ``running``, ``cycling``).
+    """
+    sql = (
+        "SELECT * FROM activities WHERE date BETWEEN ? AND ?"
+    )
+    params: list[object] = [start.isoformat(), end.isoformat()]
+    if activity_type:
+        sql += " AND type = ?"
+        params.append(activity_type)
+    sql += " ORDER BY start_time DESC"
+    rows = conn.execute(sql, params).fetchall()
+    return [dict(r) for r in rows]
+
+
+def activity_types(
+    conn: sqlite3.Connection, start: date, end: date
+) -> list[str]:
+    """Distinct activity types in ``[start, end]``, sorted."""
+    rows = conn.execute(
+        "SELECT DISTINCT type FROM activities "
+        "WHERE date BETWEEN ? AND ? AND type IS NOT NULL "
+        "ORDER BY type",
+        (start.isoformat(), end.isoformat()),
+    ).fetchall()
+    return [r["type"] for r in rows]
