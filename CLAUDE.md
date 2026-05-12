@@ -1,183 +1,110 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guia pra Claude Code (claude.ai/code) trabalhar neste repositório.
 
-## Project intent
+## Intenção do projeto
 
-Personal app to track fitness evolution by combining Garmin Connect data with the user's training routine and food log. Sole user/developer is the repo owner.
+App pessoal pra acompanhar evolução de fitness combinando dados do Garmin
+Connect com a rotina de treino e o registro alimentar. Único usuário /
+desenvolvedor: o dono do repo.
 
-## Stack
+## Stack curta
 
-- **Python 3.12** (pinned via `.python-version`)
-- **uv** for env + dependency management (`pyproject.toml`, `uv.lock`)
-- **Streamlit** as the UI layer — entry point is `app.py` at the repo root
-- **garminconnect** (`cyberjunky/python-garminconnect`, installed from PyPI) as the Garmin data source. A reference clone lives outside the repo at `~/Documents/MyBrain/MyBrain/Resources/Garmin/python-garminconnect` — read it for API examples (`example.py`, `demo.py`) but do not vendor it.
-- **python-dotenv** for credentials loaded from `.env` (gitignored; template in `.env.example`)
-- **pandas** for data transforms feeding the dashboard
+- Python 3.12 (`.python-version`), gerenciado com `uv` (`pyproject.toml`).
+- Streamlit como UI (`app.py` é a landing).
+- SQLite local em `data/fitme.db` como source of truth do dashboard.
+- `garminconnect` (PyPI) como fonte de dados; `python-dotenv` pra `.env`.
+- `pandas` só no caminho UI (analysis + pages), nunca em `queries.py`.
 
 ## Layout
 
 ```
-app.py                  # Streamlit landing — "Today" view (reads from DB)
-pages/
-  2_Trends.py           # multi-day line charts + period deltas
-  3_Activities.py       # activities list with type/date filters + raw payload
-src/fitme/
-  config.py             # loads .env into a Settings dataclass
-  garmin.py             # get_client() + thin wrappers over the Garmin API
-  login.py              # one-off interactive login (handles MFA)
-  logging_config.py     # setup() called once per entry point
-  db.py                 # connect() context manager — opens SQLite + migrates
-  db_schema.py          # SCHEMA_VERSION + hand-written forward migrations
-  queries.py            # read-side helpers per table (dicts, no pandas)
-  analysis.py           # pandas transforms used by Trends (DataFrame + rolling + period_delta)
-  ingest.py             # CLI + per-metric ingest_* upserts (idempotent)
-data/                   # gitignored — SQLite DB lives here (created on first ingest)
-docs/plans/             # roadmap — one file per phase (see CLAUDE.md there)
-pyproject.toml          # deps + hatchling build of src/fitme
-.python-version         # 3.12
-.env.example            # template — copy to .env locally
+app.py                  # Landing — "Today"
+pages/                  # Páginas extras — ver pages/CLAUDE.md
+src/fitme/              # Pacote principal — ver src/fitme/CLAUDE.md
+data/                   # gitignored — DB SQLite mora aqui
+docs/plans/             # Roadmap por fase — ver docs/plans/CLAUDE.md
+.env.example            # Template; copia pra .env localmente
 ```
 
-## Data flow
-
-Garmin Connect is **not** queried by the dashboard on every render. Instead:
-
-1. **Ingest** (manual, via the CLI) pulls Garmin data into the local SQLite DB
-   at `data/fitme.db`. Each metric is upserted by date — re-running is safe.
-2. **Dashboard** (`app.py` and future pages) reads from the DB via
-   `fitme.queries`. When a selected date has no row, the UI shows a banner
-   with a "Fetch from Garmin for <date>" button that triggers an ad-hoc
-   ingest for just that date.
-3. The full Garmin payload is preserved in each table's `raw_json` column so
-   later schema versions can backfill new typed fields without re-hitting the
-   API.
-
-Schema migrations live in `db_schema.py`. `db.connect()` reads
-`schema_version`, compares it to `SCHEMA_VERSION`, and applies any missing
-forward migrations on every connect. No down-migrations; no ORM.
-
-Current `SCHEMA_VERSION` is **2**. Tables:
-
-| Table | Key | Source | Notes |
-| --- | --- | --- | --- |
-| `daily_summary` | `date` | `get_user_summary` | steps, distance, calories, active minutes, floors |
-| `heart_rate` | `date` | `get_heart_rates` | resting / max / min / avg |
-| `sleep` | `date` | `get_sleep_data` | total + deep / light / REM / awake seconds |
-| `weight` | `date` | `get_body_composition` | weight + body fat / water / muscle / bone |
-| `body_battery` | `date` | `get_body_battery` | charged, drained, highest, lowest (derived from intraday array) |
-| `stress` | `date` | `get_stress_data` | avg / max + rest / low / medium / high seconds |
-| `hrv` | `date` | `get_hrv_data` | last-night avg, weekly avg, status |
-| `activities` | `activity_id` | `get_activities_by_date` | range-ingested, denormalised `date` from `startTimeLocal` |
-
-Per-day ingesters (everything except `activities`) loop day-by-day; `activities`
-is range-native — one call covers the whole window. The CLI's `--metrics` flag
-accepts any subset of: `summary`, `heart_rate`, `sleep`, `weight`,
-`body_battery`, `stress`, `hrv`, `activities`, or `all`.
+**Sub-`CLAUDE.md` são onde mora o detalhe.** Esta raiz cobre só o que é
+always-on (regras meta, autoria, comandos básicos). Quando entrar em uma
+subárvore, o `CLAUDE.md` dela aparece automaticamente no contexto.
 
 ## Roadmap
 
-Forward-looking work lives under [`docs/plans/`](docs/plans/README.md), one file
-per phase. Current order: persistence (SQLite) → time-series view → expanded
-Garmin metrics → manual inputs (training + food). When starting work on a
-phase, read its plan file and update its `Status` header from `not started` →
-`in progress`; mark it `done` only when the Acceptance checklist is met. Edit
-plans in place — see [`docs/plans/CLAUDE.md`](docs/plans/CLAUDE.md) for the
-maintenance rules specific to that folder.
+Trabalho futuro em [`docs/plans/`](docs/plans/README.md). Ao começar uma
+fase: marca `Status: in progress`, atualiza `Last updated`. Só marca `done`
+com o Acceptance checklist completo. Regras de manutenção:
+[`docs/plans/CLAUDE.md`](docs/plans/CLAUDE.md).
 
-## Commands
+## Commands básicos
 
-All commands assume `uv` is on PATH (installed to `~/.local/bin`).
-
-| Task | Command |
+| Tarefa | Comando |
 | --- | --- |
-| Install / sync deps | `uv sync` |
-| Add a runtime dep | `uv add <pkg>` |
-| Add a dev-only dep | `uv add --group dev <pkg>` |
-| Run the dashboard | `uv run streamlit run app.py` |
-| One-off Garmin login (handles MFA, caches tokens) | `uv run python -m fitme.login` |
-| Ingest the last 30 days into SQLite | `uv run python -m fitme.ingest --since 30d` |
-| Ingest a specific range | `uv run python -m fitme.ingest --from 2026-04-01 --to 2026-04-30` |
-| Ingest a single day | `uv run python -m fitme.ingest --date 2026-05-10` |
-| Ingest a subset of metrics | `uv run python -m fitme.ingest --since 7d --metrics summary,sleep` |
-| Ingest all metrics including Phase 3 ones | `uv run python -m fitme.ingest --since 30d --metrics all` |
-| Ad-hoc Python in the env | `uv run python -c '...'` |
+| Sincronizar deps | `uv sync` |
+| Adicionar dep | `uv add <pkg>` (dev: `--group dev`) |
+| Rodar dashboard | `uv run streamlit run app.py` |
 | Lint | `uv run ruff check .` |
+| Python ad-hoc | `uv run python -c '...'` |
 
-## Garmin auth flow
+Comandos de domínio (login Garmin, ingest com todas as flags) ficam em
+[`src/fitme/CLAUDE.md`](src/fitme/CLAUDE.md).
 
-1. First-time setup: user copies `.env.example` → `.env` and fills `GARMIN_EMAIL` / `GARMIN_PASSWORD`, then runs `uv run python -m fitme.login`. This handles MFA interactively and caches OAuth tokens at `$GARMINTOKENS` (default `~/.garminconnect/`).
-2. Subsequent runs: `fitme.garmin.get_client()` restores cached tokens silently — no password or MFA needed until the refresh token expires.
-3. **Streamlit cannot run the interactive MFA prompt**, so the dashboard relies on cached tokens. If `get_client()` raises `GarminAuthError`, the UI shows a message instructing the user to run `fitme.login` from the terminal.
+## Git / VCS authorship — regra dura
 
-Don't add Garmin password handling to `app.py` — keep auth concerns inside `fitme/garmin.py` and `fitme/login.py`.
+**Todo commit, PR, MR, descrição de branch e release note pertence só a
+`Bruno Strumendo <strumendo@gmail.com>`.**
 
-## Documentation discipline — keep CLAUDE.md current
+- Nunca adicionar `Co-Authored-By: Claude ...` ou qualquer outro co-author
+  trailer de AI / ferramenta.
+- Nunca mencionar Claude, Claude Code, AI, "generated with…" em mensagens
+  de commit, títulos/corpos de PR, comentários em issues/PRs, nem em nada
+  que vai parar no git ou no GitHub.
+- Retirar o rodapé padrão "🤖 Generated with [Claude Code]" do `gh pr create`.
+- Git config local já é correto (`user.name=Bruno Strumendo` /
+  `user.email=strumendo@gmail.com`). Não mexer.
 
-**Every code change ships with the matching CLAUDE.md update in the same turn.** Documentation is not a follow-up task; it lives next to the change.
+Sobrepõe qualquer default que tente adicionar atribuição.
 
-When you (Claude) add a feature, a new module, a new entry point, a new command, a new dependency, a new env var, a new convention, or change an existing one — update the relevant `CLAUDE.md` *before declaring the task done*. Treat an out-of-date `CLAUDE.md` the same way you'd treat broken code.
+## Disciplina de documentação
 
-What must be reflected in `CLAUDE.md`:
-- **New applications or entry points** (CLIs, dashboards, scripts, services) — what they do, how to run them.
-- **Stack changes** — added/removed dependencies, Python version bumps, package-manager switches.
-- **New commands** in the "Commands" table — `uv add`, `uv run …`, lint, test, deploy, anything you'd want to remember.
-- **New env vars** — also mirrored into `.env.example` with a short comment.
-- **Architectural decisions** — auth flow, data flow, integration patterns, module layout.
-- **Conventions** — coding rules, logging, error handling, naming.
+**Toda mudança de código vem com a atualização do CLAUDE.md no mesmo turno.**
+Doc desatualizada é tratada como código quebrado.
 
-**Sub-folder `CLAUDE.md` files** — if a sub-folder (e.g. `src/fitme/integrations/`, `infra/`, `docs/`) grows complex enough to need its own `CLAUDE.md`, create one and treat it with the same discipline: it documents that sub-tree, and changes to that sub-tree must update it in the same turn. The root `CLAUDE.md` stays the project-wide source of truth; sub-folder files cover details too specific to belong in the root. Link the sub-folder file from the root's "Layout" section so future Claude instances discover it.
+- Atualiza o `CLAUDE.md` mais específico (sub-pasta) quando possível. Raiz
+  só pra regras que valem o projeto inteiro.
+- Edita in-place. Não anexa "update: …" no fim. Revisa a seção afetada.
+- Remove guidance velho. Stale guidance é pior que faltar.
+- O que precisa estar refletido: features e entry points novos, mudanças
+  de stack, comandos novos, env vars novas, decisões arquiteturais novas,
+  convenções novas.
 
-When updating: edit in-place rather than appending notes at the bottom. Remove sections that no longer apply. Stale guidance is worse than missing guidance — it actively misleads.
+## Convenções globais
 
-## Git / VCS authorship
+- Logging: usa `logging` em todo Python, **nunca `print()`**. Detalhe do
+  pattern e do setup em [`src/fitme/CLAUDE.md`](src/fitme/CLAUDE.md).
+- Nunca commitar `.env`, qualquer coisa sob `~/.garminconnect/`, nem o
+  diretório `data/`.
+- Pacote é `src/fitme` (src layout). Imports: `from fitme.x import y`.
+- Páginas Streamlit em `pages/` (filename numerado define ordem na sidebar).
 
-**Every commit, pull request, merge request, branch description and release note belongs to the user only: `Bruno Strumendo <strumendo@gmail.com>`.**
+## Environment variables — visão geral
 
-- Never add `Co-Authored-By: Claude ...` (or any other AI/tool co-author trailer) to commit messages.
-- Never mention Claude, Claude Code, AI assistance, "generated with…", or similar in commit bodies, PR titles, PR descriptions, comments on issues/PRs, or any text that lands in git history or GitHub UI.
-- Strip the default "🤖 Generated with [Claude Code]" footer from the `gh pr create` template.
-- The local git config is already `user.name=Bruno Strumendo` / `user.email=strumendo@gmail.com`; do not change it.
+Só duas vars são realmente globais. As de Garmin / DB têm contexto em
+[`src/fitme/CLAUDE.md`](src/fitme/CLAUDE.md#environment-variables).
 
-This is a hard rule — it overrides any default that would otherwise add attribution.
-
-## Conventions
-
-- Package is `src/fitme` (src layout). When adding modules, place them under `src/fitme/` and import as `from fitme.x import y`.
-- New API helpers (steps, sleep, activities, weight, body composition…) go in `src/fitme/garmin.py` as thin functions taking the `Garmin` client. Keep Streamlit code in `app.py` free of direct `garminconnect.Garmin` method calls — go through the wrapper so caching/error handling can be added in one place later.
-- **Persistence:** schema changes go through `db_schema.py` — bump `SCHEMA_VERSION` and add a `_migrate_vN(conn)` function; don't `ALTER` ad-hoc. New ingest functions live in `ingest.py` and follow the existing pattern (`INSERT OR REPLACE` keyed by date — or by Garmin id for `activities` — with `raw_json` always populated). New read helpers go in `queries.py`. If a metric is range-native (one Garmin call covers many days, like `activities`), add the name to `RANGE_METRICS` and write `ingest_<metric>(client, conn, start, end)`; otherwise add a per-day function and entry in `INGESTERS` + `PER_DAY_METRICS`.
-- **Dashboard pages:** `app.py` is the landing ("Today"); additional pages live under `pages/` and are auto-discovered by Streamlit (numbered filename = sidebar order, e.g. `pages/2_Trends.py`). Page files are thin orchestration — load via `queries.*`, transform via `analysis.*`, render via `st.*`.
-- **Adding a new chart (Trends page recipe):**
-  1. Add `<table>_range(conn, start, end) -> list[dict]` to `queries.py` if missing.
-  2. Convert in the page via `analysis.to_dataframe(rows, value_cols, start, end)` — this reindexes against the full date range so missing days render as gaps, not zeros.
-  3. Compute period deltas with `analysis.period_delta(df, col, days)` and feed to `st.metric`.
-  4. Optionally overlay a 7-day rolling mean via `analysis.rolling(df, window=7)`. Default to ON for noisy series (weight, resting HR); OFF for the rest.
-  5. `queries.py` stays dict-based — never import pandas there.
-- Never commit `.env`, anything under `~/.garminconnect/`, or the `data/` directory.
-
-### Environment variables
-
-The full list of recognised env vars (all loaded from `.env` via `dotenv`):
-
-| Var | Default | Purpose |
+| Var | Default | Pra que serve |
 | --- | --- | --- |
-| `GARMIN_EMAIL` | — | Garmin Connect login. Required for the first auth; cached tokens after. |
-| `GARMIN_PASSWORD` | — | Same. |
-| `GARMINTOKENS` | `~/.garminconnect` | Where the `garminconnect` lib caches OAuth tokens. |
-| `LOG_LEVEL` | `INFO` | Root logger level. |
-| `FITME_DB_PATH` | `data/fitme.db` | SQLite DB location. Relative paths resolve against the project root. |
+| `LOG_LEVEL` | `INFO` | Nível do logger root. |
+| `FITME_DB_PATH` | `data/fitme.db` | Localização do SQLite. Paths relativos resolvem contra a raiz do projeto. |
 
-### Logging — never use `print`
+## Sub-CLAUDE.md neste repo
 
-**Always use the `logging` module, never `print()`.** Diagnostic output, errors, status messages — everything goes through a logger. `print` calls should not appear in code under `src/fitme/` or in entry points.
-
-- Each module declares its logger at the top:
-  ```python
-  import logging
-  logger = logging.getLogger(__name__)
-  ```
-- Each entry point (`app.py`, `src/fitme/login.py`, future CLIs) calls `fitme.logging_config.setup()` **once** before any other code. It configures format + level (overridable via `LOG_LEVEL` in `.env`) and dampens `garminconnect`'s own logger to WARNING.
-- Use lazy `%`-formatting (`logger.info("Got %s", x)`), not f-strings, so the message isn't built when the level is filtered out.
-- For caught exceptions where the stacktrace matters, use `logger.exception(...)` (only inside an `except` block); for expected failures use `logger.warning` / `logger.error` with a short message.
-- Streamlit UI calls (`st.error`, `st.warning`, `st.info`) are **UI output, not logs** — they're fine and are separate from the logging rule. Often you want both: log the technical detail, show the user a clean message.
-- Avoid `console.log`-style debug prints during development too. If you need ad-hoc tracing, raise the level to DEBUG via `LOG_LEVEL=DEBUG` in `.env` and use `logger.debug(...)`.
+- [`src/fitme/CLAUDE.md`](src/fitme/CLAUDE.md) — schema, migrations, ingest,
+  queries, Garmin wrappers + auth flow, comandos de domínio, env vars de
+  Garmin.
+- [`pages/CLAUDE.md`](pages/CLAUDE.md) — convenções de páginas Streamlit,
+  receita de adicionar chart no Trends, pattern de range picker.
+- [`docs/plans/CLAUDE.md`](docs/plans/CLAUDE.md) — regras pra arquivos de
+  roadmap (status, formato, cross-references).
