@@ -1,7 +1,7 @@
 # Phase 2 — Time series + history view
 
-Status: in progress
-Last updated: 2026-05-11
+Status: done
+Last updated: 2026-05-12
 
 ## Goal
 

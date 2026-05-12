@@ -70,3 +70,30 @@ def body_composition(client: Garmin, day: date | None = None) -> dict:
     """
     iso = (day or date.today()).isoformat()
     return client.get_body_composition(iso)
+
+
+def activities(client: Garmin, start: date, end: date) -> list[dict]:
+    """Return activities with start date in ``[start, end]`` (inclusive).
+
+    Wraps ``get_activities_by_date`` which paginates internally.
+    """
+    return client.get_activities_by_date(start.isoformat(), end.isoformat())
+
+
+def body_battery(client: Garmin, day: date | None = None) -> list[dict]:
+    """Return body-battery summary for ``day``.
+
+    Garmin returns a list with one entry per requested date.
+    """
+    iso = (day or date.today()).isoformat()
+    return client.get_body_battery(iso)
+
+
+def stress(client: Garmin, day: date | None = None) -> dict:
+    iso = (day or date.today()).isoformat()
+    return client.get_stress_data(iso)
+
+
+def hrv(client: Garmin, day: date | None = None) -> dict | None:
+    iso = (day or date.today()).isoformat()
+    return client.get_hrv_data(iso)

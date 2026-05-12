@@ -12,7 +12,7 @@ from typing import Callable
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 def _current_version(conn: sqlite3.Connection) -> int:
@@ -75,8 +75,64 @@ def _migrate_v1(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_v2(conn: sqlite3.Connection) -> None:
+    conn.executescript(
+        """
+        CREATE TABLE activities (
+            activity_id     INTEGER PRIMARY KEY,
+            date            TEXT NOT NULL,
+            start_time      TEXT NOT NULL,
+            type            TEXT,
+            name            TEXT,
+            duration_s      INTEGER,
+            distance_m      REAL,
+            calories_kcal   REAL,
+            avg_hr_bpm      INTEGER,
+            max_hr_bpm      INTEGER,
+            raw_json        TEXT,
+            fetched_at      TEXT NOT NULL
+        );
+        CREATE INDEX activities_date_idx ON activities(date);
+        CREATE INDEX activities_type_idx ON activities(type);
+
+        CREATE TABLE body_battery (
+            date            TEXT PRIMARY KEY,
+            charged         INTEGER,
+            drained         INTEGER,
+            highest         INTEGER,
+            lowest          INTEGER,
+            raw_json        TEXT,
+            fetched_at      TEXT NOT NULL
+        );
+
+        CREATE TABLE stress (
+            date            TEXT PRIMARY KEY,
+            avg_level       INTEGER,
+            max_level       INTEGER,
+            rest_seconds    INTEGER,
+            low_seconds     INTEGER,
+            medium_seconds  INTEGER,
+            high_seconds    INTEGER,
+            raw_json        TEXT,
+            fetched_at      TEXT NOT NULL
+        );
+
+        CREATE TABLE hrv (
+            date            TEXT PRIMARY KEY,
+            weekly_avg      INTEGER,
+            last_night_avg  INTEGER,
+            last_night_5min_high INTEGER,
+            status          TEXT,
+            raw_json        TEXT,
+            fetched_at      TEXT NOT NULL
+        );
+        """
+    )
+
+
 _MIGRATIONS: dict[int, Callable[[sqlite3.Connection], None]] = {
     1: _migrate_v1,
+    2: _migrate_v2,
 }
 
 
