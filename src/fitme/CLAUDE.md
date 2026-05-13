@@ -18,6 +18,7 @@ src/fitme/
   repository.py     # Write helpers (insert/update/delete) das tabelas manuais.
   analysis.py       # Transforms pandas usadas pelas pages.
   ingest.py         # CLI + funções ingest_* idempotentes.
+  export.py         # CLI + funções de export CSV / snapshot SQLite.
 ```
 
 ## Data flow
@@ -138,9 +139,17 @@ Comandos básicos de dev (`uv sync`, `streamlit run`, lint) ficam no root
 | Ingest um dia só | `uv run python -m fitme.ingest --date 2026-05-10` |
 | Ingest subset de métricas | `uv run python -m fitme.ingest --since 7d --metrics summary,sleep` |
 | Ingest tudo (todas as 8 métricas) | `uv run python -m fitme.ingest --since 30d --metrics all` |
+| Export CSV (todas as tabelas) | `uv run python -m fitme.export csv` |
+| Export CSV com `raw_json` | `uv run python -m fitme.export csv --include-raw` |
+| Export subset de tabelas | `uv run python -m fitme.export csv --tables training_log,food_log` |
+| Snapshot SQLite consistente | `uv run python -m fitme.export sqlite` |
 
 Nomes válidos pra `--metrics`: `summary`, `heart_rate`, `sleep`, `weight`,
 `body_battery`, `stress`, `hrv`, `activities`, ou `all`.
+
+Outputs do `fitme.export` caem em `data/exports/<utc-iso>/` (CSV) ou
+`data/exports/fitme-<utc-iso>.db` (snapshot) por default. Override com
+`--to`. O `data/` inteiro já é gitignored.
 
 ## Environment variables
 
