@@ -15,6 +15,7 @@ src/fitme/
   db.py             # connect() context manager — abre SQLite + roda migrações.
   db_schema.py      # SCHEMA_VERSION + migrações forward escritas à mão.
   queries.py        # Read helpers por tabela (devolvem dict, sem pandas).
+  repository.py     # Write helpers (insert/update/delete) das tabelas manuais.
   analysis.py       # Transforms pandas usadas pelas pages.
   ingest.py         # CLI + funções ingest_* idempotentes.
 ```
@@ -34,7 +35,7 @@ O Garmin Connect **não** é chamado em cada render da dashboard. O modelo é:
 
 ## Schema — versão atual e tabelas
 
-`SCHEMA_VERSION` atual: **2**.
+`SCHEMA_VERSION` atual: **3**.
 
 | Tabela | Chave | Fonte | Notas |
 | --- | --- | --- | --- |
@@ -46,6 +47,9 @@ O Garmin Connect **não** é chamado em cada render da dashboard. O modelo é:
 | `stress` | `date` | `get_stress_data` | avg / max + rest / low / medium / high em segundos |
 | `hrv` | `date` | `get_hrv_data` | last-night avg, weekly avg, status |
 | `activities` | `activity_id` | `get_activities_by_date` | range-ingested, coluna `date` denormalizada de `startTimeLocal` |
+| `training_plan` | `plan_id` | manual (UI) | template semanal versionado por `effective_from`; UNIQUE(`effective_from`, `weekday`, `slot`) |
+| `training_log` | `log_id` | manual (UI) | sessão registrada à mão; `garmin_activity_id` opcional referencia `activities.activity_id` |
+| `food_log` | `food_id` | manual (UI) | entrada por refeição com kcal + macros (protein/carbs/fat) |
 
 ## Schema migrations — disciplina
 
@@ -97,6 +101,21 @@ Em ambos os casos:
   parâmetros nomeados opcionais.
 - Pandas vive em `analysis.py` e nas pages. `queries` continua testável sem
   pandas no loop.
+
+## Repository (writes) — convenção
+
+`repository.py` é o dual write-side do `queries.py`. Páginas Streamlit **não**
+escrevem direto via SQL — chamam funções daqui.
+
+- Funções são `insert_<table>`, `update_<table>(id, ...)`, `delete_<table>(id)`.
+  `training_plan` usa `upsert_training_plan_slot(...)` porque a UNIQUE
+  constraint em (`effective_from`, `weekday`, `slot`) torna o save idempotente.
+- Argumentos opcionais ficam keyword-only com default `None` (forms da UI
+  passam ou não passam macros / notes; SQL guarda `NULL`).
+- `created_at` / `updated_at` são preenchidos via `_now_iso()` (mesmo formato
+  UTC ISO-8601 do `ingest.py`).
+- Sem pandas, sem Garmin client aqui — só `sqlite3.Connection`. Testável em
+  isolamento.
 
 ## Garmin wrappers
 
