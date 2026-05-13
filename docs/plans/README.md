@@ -8,7 +8,7 @@ for one phase. Status is tracked in the header of each file.
 | 1 | Local persistence (SQLite) | done | [01-persistence.md](01-persistence.md) |
 | 2 | Time series + history view | done | [02-time-series.md](02-time-series.md) |
 | 3 | Expanded Garmin metrics | done | [03-more-garmin.md](03-more-garmin.md) |
-| 4 | Manual inputs — training + food | in progress | [04-manual-inputs.md](04-manual-inputs.md) |
+| 4 | Manual inputs — training + food | done | [04-manual-inputs.md](04-manual-inputs.md) |
 
 ## Why this order
 

@@ -2,12 +2,17 @@
 
 The fitme dashboard is a multi-page Streamlit app:
 
-- This file (``app.py``) is the landing "Today" page — single-day snapshot.
+- This file (``app.py``) is the landing "Today" page — single-day snapshot
+  combining Garmin metrics with planned training, logged sessions, and the
+  day's food entries.
 - ``pages/2_Trends.py`` — multi-day line charts and period deltas.
+- ``pages/3_Activities.py`` — Garmin activities list with filters.
+- ``pages/4_Training.py`` — weekly plan editor + session log + plan vs actual.
+- ``pages/5_Food.py`` — meal entries + per-day totals + range trends.
 
-Both pages read from the local SQLite DB. If a date has no row, the Today
-page offers a one-click button that calls the ingest pipeline for that date
-and reruns. Background ingest still happens manually via
+All pages read from the local SQLite DB. If a date has no Garmin data, the
+Today page offers a one-click button that calls the ingest pipeline for that
+date and reruns. Background ingest still happens manually via
 ``uv run python -m fitme.ingest``.
 
 Run with::
@@ -35,6 +40,7 @@ from fitme.ingest import (
 )
 from fitme.logging_config import setup as setup_logging
 from fitme.queries import (
+    food_log_range,
     get_body_battery,
     get_daily_summary,
     get_heart_rate,
@@ -42,7 +48,11 @@ from fitme.queries import (
     get_sleep,
     get_stress,
     get_weight,
+    plan_for_date,
+    training_log_range,
 )
+
+WEEKDAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -80,8 +90,19 @@ with connect() as conn:
     bb_row = get_body_battery(conn, selected)
     stress_row = get_stress(conn, selected)
     hrv_row = get_hrv(conn, selected)
+    plan_rows = plan_for_date(conn, selected)
+    logged_sessions = training_log_range(conn, selected, selected)
+    food_rows = food_log_range(conn, selected, selected)
 
-if not any((summary, hr, sleep_row, weight_row, bb_row, stress_row, hrv_row)):
+planned_today = next(
+    (r for r in plan_rows if r["weekday"] == selected.weekday()), None
+)
+garmin_present = any(
+    (summary, hr, sleep_row, weight_row, bb_row, stress_row, hrv_row)
+)
+manual_present = bool(planned_today or logged_sessions or food_rows)
+
+if not garmin_present and not manual_present:
     st.info(f"No data stored for {selected.isoformat()}.")
     if st.button(f"Fetch from Garmin for {selected.isoformat()}"):
         with st.spinner("Fetching from Garmin..."):
@@ -172,6 +193,52 @@ with col7:
             st.caption(f"Status: {hrv_row['status']}")
     else:
         st.caption("No HRV stored.")
+
+col_t, col_f = st.columns(2)
+
+with col_t:
+    st.subheader("Training")
+    if planned_today:
+        target = planned_today["target_duration_min"]
+        target_str = f" ({target} min)" if target else ""
+        st.markdown(
+            f"**Planned ({WEEKDAY_NAMES[selected.weekday()]}):** "
+            f"{planned_today['activity_type']}{target_str}"
+        )
+        if planned_today["description"]:
+            st.caption(planned_today["description"])
+    else:
+        st.caption(f"No plan for {WEEKDAY_NAMES[selected.weekday()]}.")
+    if logged_sessions:
+        st.markdown("**Logged:**")
+        for row in logged_sessions:
+            duration = f"{row['duration_min']} min" if row["duration_min"] else "—"
+            effort = (
+                f", effort {row['perceived_effort']}"
+                if row["perceived_effort"] else ""
+            )
+            st.write(f"• {row['activity_type']} — {duration}{effort}")
+    else:
+        st.caption("Nothing logged yet — head to the Training page.")
+
+with col_f:
+    st.subheader("Food")
+    if food_rows:
+        totals = {
+            "kcal": sum((r["kcal"] or 0) for r in food_rows),
+            "protein_g": sum((r["protein_g"] or 0) for r in food_rows),
+            "carbs_g": sum((r["carbs_g"] or 0) for r in food_rows),
+            "fat_g": sum((r["fat_g"] or 0) for r in food_rows),
+        }
+        st.metric("kcal", f"{totals['kcal']:.0f}")
+        st.caption(
+            f"P {totals['protein_g']:.0f} g · "
+            f"C {totals['carbs_g']:.0f} g · "
+            f"F {totals['fat_g']:.0f} g · "
+            f"{len(food_rows)} entries"
+        )
+    else:
+        st.caption("No food logged — head to the Food page.")
 
 if summary and summary["raw_json"]:
     with st.expander("Raw daily-summary payload"):

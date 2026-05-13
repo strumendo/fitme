@@ -1,6 +1,6 @@
 # Phase 4 — Manual inputs: training routine + food log
 
-Status: in progress
+Status: done
 Last updated: 2026-05-13
 
 ## Goal
@@ -141,15 +141,15 @@ module added in this phase to keep mutation logic out of pages).
 
 ## Acceptance
 
-- [ ] User can set up a weekly training plan from the UI and supersede it
+- [x] User can set up a weekly training plan from the UI and supersede it
       later without losing history.
-- [ ] User can log an actual training session and optionally link it to a
+- [x] User can log an actual training session and optionally link it to a
       Garmin activity from that day.
-- [ ] User can add food entries with kcal + macros and see per-day totals and
+- [x] User can add food entries with kcal + macros and see per-day totals and
       a range view of average daily intake.
-- [ ] "Today" page shows: Garmin block + planned training for today +
+- [x] "Today" page shows: Garmin block + planned training for today +
       actual training logged today + food log totals for today.
-- [ ] Edit and delete work for all manual entries.
+- [x] Edit and delete work for all manual entries.
 
 ## Open questions
 
