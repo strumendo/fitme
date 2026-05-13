@@ -9,6 +9,7 @@ The fitme dashboard is a multi-page Streamlit app:
 - ``pages/3_Activities.py`` — Garmin activities list with filters.
 - ``pages/4_Training.py`` — weekly plan editor + session log + plan vs actual.
 - ``pages/5_Food.py`` — meal entries + per-day totals + range trends.
+- ``pages/9_Backup.py`` — SQLite snapshot + CSV bundle download.
 
 All pages read from the local SQLite DB. If a date has no Garmin data, the
 Today page offers a one-click button that calls the ingest pipeline for that
