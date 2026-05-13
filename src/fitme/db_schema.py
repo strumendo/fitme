@@ -12,7 +12,7 @@ from typing import Callable
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 def _current_version(conn: sqlite3.Connection) -> int:
@@ -130,9 +130,58 @@ def _migrate_v2(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_v3(conn: sqlite3.Connection) -> None:
+    conn.executescript(
+        """
+        CREATE TABLE training_plan (
+            plan_id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            effective_from      TEXT NOT NULL,
+            weekday             INTEGER NOT NULL,
+            slot                INTEGER NOT NULL DEFAULT 0,
+            activity_type       TEXT NOT NULL,
+            description         TEXT,
+            target_duration_min INTEGER,
+            created_at          TEXT NOT NULL,
+            UNIQUE(effective_from, weekday, slot)
+        );
+        CREATE INDEX training_plan_effective_idx
+            ON training_plan(effective_from);
+
+        CREATE TABLE training_log (
+            log_id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            date                TEXT NOT NULL,
+            activity_type       TEXT NOT NULL,
+            duration_min        INTEGER,
+            perceived_effort    INTEGER,
+            notes               TEXT,
+            garmin_activity_id  INTEGER,
+            created_at          TEXT NOT NULL,
+            updated_at          TEXT NOT NULL
+        );
+        CREATE INDEX training_log_date_idx ON training_log(date);
+
+        CREATE TABLE food_log (
+            food_id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            date                TEXT NOT NULL,
+            meal                TEXT,
+            description         TEXT NOT NULL,
+            kcal                REAL,
+            protein_g           REAL,
+            carbs_g             REAL,
+            fat_g               REAL,
+            notes               TEXT,
+            created_at          TEXT NOT NULL,
+            updated_at          TEXT NOT NULL
+        );
+        CREATE INDEX food_log_date_idx ON food_log(date);
+        """
+    )
+
+
 _MIGRATIONS: dict[int, Callable[[sqlite3.Connection], None]] = {
     1: _migrate_v1,
     2: _migrate_v2,
+    3: _migrate_v3,
 }
 
 

@@ -1,7 +1,7 @@
 # Phase 4 — Manual inputs: training routine + food log
 
-Status: not started
-Last updated: 2026-05-10
+Status: in progress
+Last updated: 2026-05-13
 
 ## Goal
 
