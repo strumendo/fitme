@@ -20,6 +20,13 @@ A Today page (`app.py`) também concatena dados manuais: além do bloco
 Garmin, mostra o slot do plano semanal do dia, sessões logadas e totais de
 food do dia.
 
+`5_Food.py` começa com uma seção "Find a product" que chama
+`fitme.openfoodfacts` (busca por texto ou barcode). Selecionar um produto
+seta `st.session_state["food_prefill"]` e o form "Add entry" abaixo
+renderiza com a descrição preenchida + input de porção em gramas; a macro
+é escalada do per-100g no submit. Quando a API falha, a seção fica
+silenciosa e o form manual continua funcional.
+
 Streamlit auto-descobre arquivos sob `pages/` e os ordena pelo prefixo
 numérico do filename — `2_Trends.py` aparece como segundo item na sidebar.
 

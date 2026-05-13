@@ -1,7 +1,8 @@
-"""Food page — meal-by-meal entries, per-day totals, range trends.
+"""Food page — search Open Food Facts to prefill entries, log meals, see trends.
 
-Manual macros for now (no external nutrient DB lookup — that's a possible
-later phase). Reads via ``fitme.queries``, writes via ``fitme.repository``.
+Search / barcode lookup is optional polish on top of the manual flow: any
+API failure falls back to the same manual form that's always been here.
+Reads via ``fitme.queries``, writes via ``fitme.repository``.
 """
 from __future__ import annotations
 
@@ -11,7 +12,7 @@ from datetime import date, timedelta
 import pandas as pd
 import streamlit as st
 
-from fitme import repository
+from fitme import openfoodfacts, repository
 from fitme.db import connect
 from fitme.logging_config import setup as setup_logging
 from fitme.queries import food_log_range, food_macros_summary
@@ -31,25 +32,154 @@ DEFAULT_DAYS = 14
 
 
 # ---------------------------------------------------------------------------
+# OFF helpers (cached)
+# ---------------------------------------------------------------------------
+
+
+@st.cache_data(ttl=86_400, show_spinner=False)
+def _cached_search(query: str, lang: str) -> list[dict]:
+    return openfoodfacts.search(query, lang=lang)
+
+
+@st.cache_data(ttl=86_400, show_spinner=False)
+def _cached_barcode(code: str) -> dict | None:
+    return openfoodfacts.lookup_barcode(code)
+
+
+def _set_prefill(product: dict) -> None:
+    st.session_state["food_prefill"] = product
+
+
+def _clear_prefill() -> None:
+    st.session_state.pop("food_prefill", None)
+
+
+# ---------------------------------------------------------------------------
+# Find a product (Open Food Facts)
+# ---------------------------------------------------------------------------
+
+st.header("Find a product")
+st.caption(
+    "Search or paste a barcode to prefill the Add entry form with kcal + "
+    "macros from Open Food Facts. Skip this section to enter values manually."
+)
+
+search_col, barcode_col = st.columns(2)
+
+with search_col:
+    with st.form("off_search_form"):
+        query = st.text_input("Search by name", placeholder="ex.: nutella, iogurte")
+        searched = st.form_submit_button("Search", use_container_width=True)
+    if searched and query.strip():
+        with st.spinner("Querying Open Food Facts..."):
+            st.session_state["food_search_results"] = _cached_search(query, "pt")
+
+with barcode_col:
+    with st.form("off_barcode_form"):
+        code_input = st.text_input("Barcode (EAN/UPC)", placeholder="3017624010701")
+        scanned = st.form_submit_button("Look up", use_container_width=True)
+    if scanned and code_input.strip():
+        with st.spinner("Querying Open Food Facts..."):
+            hit = _cached_barcode(code_input.strip())
+        st.session_state["food_search_results"] = [hit] if hit else []
+        if not hit:
+            st.warning(f"No product found for barcode {code_input.strip()}.")
+
+results = st.session_state.get("food_search_results") or []
+
+if results:
+    st.markdown("**Results**")
+    for product in results:
+        img_col, info_col, button_col = st.columns([1, 5, 1])
+        img = product.get("image_url")
+        if img:
+            img_col.image(img, width=60)
+        info_col.markdown(
+            f"**{product['name']}**"
+            + (f" — {product['brand']}" if product.get("brand") else "")
+        )
+        macro_bits = [f"{product['kcal_per_100g']:.0f} kcal/100g"]
+        if product.get("protein_per_100g") is not None:
+            macro_bits.append(f"P {product['protein_per_100g']:.1f}")
+        if product.get("carbs_per_100g") is not None:
+            macro_bits.append(f"C {product['carbs_per_100g']:.1f}")
+        if product.get("fat_per_100g") is not None:
+            macro_bits.append(f"F {product['fat_per_100g']:.1f}")
+        info_col.caption(" · ".join(macro_bits))
+        if button_col.button("Use this", key=f"use_{product['code']}"):
+            _set_prefill(product)
+            st.rerun()
+elif searched and query.strip():
+    st.info("No usable hits — try a different name or fall back to manual entry.")
+
+
+# ---------------------------------------------------------------------------
 # Add entry
 # ---------------------------------------------------------------------------
 
 st.header("Add entry")
 
-with st.form("food_entry_form", clear_on_submit=True):
+prefill = st.session_state.get("food_prefill")
+prefill_tag = prefill["code"] if prefill else "manual"
+
+if prefill:
+    banner_col, clear_col = st.columns([5, 1])
+    banner_col.success(
+        f"Prefill: **{prefill['name']}**"
+        + (f" — {prefill['brand']}" if prefill.get("brand") else "")
+        + f" · {prefill['kcal_per_100g']:.0f} kcal/100 g"
+    )
+    if clear_col.button("Clear selection", use_container_width=True):
+        _clear_prefill()
+        st.rerun()
+
+
+def _default_description() -> str:
+    if not prefill:
+        return ""
+    parts = [prefill["name"]]
+    if prefill.get("brand"):
+        parts.append(f"({prefill['brand']})")
+    return " ".join(parts)
+
+
+def _scaled(value: float | None, factor: float) -> float:
+    return (value or 0.0) * factor
+
+
+with st.form(f"food_entry_form_{prefill_tag}", clear_on_submit=True):
     c1, c2 = st.columns([1, 1])
     entry_date = c1.date_input("Date", value=TODAY, max_value=TODAY)
     meal = c2.selectbox(
         "Meal", ["breakfast", "lunch", "dinner", "snack", "other"]
     )
     description = st.text_input(
-        "Description", placeholder="oatmeal + banana"
+        "Description",
+        value=_default_description(),
+        placeholder="oatmeal + banana",
     )
-    c3, c4, c5, c6 = st.columns(4)
-    kcal = c3.number_input("kcal", min_value=0.0, step=10.0, value=0.0)
-    protein = c4.number_input("protein (g)", min_value=0.0, step=1.0, value=0.0)
-    carbs = c5.number_input("carbs (g)", min_value=0.0, step=1.0, value=0.0)
-    fat = c6.number_input("fat (g)", min_value=0.0, step=1.0, value=0.0)
+    if prefill:
+        portion_g = st.number_input(
+            "Portion (g)", min_value=1.0, max_value=5000.0,
+            step=10.0, value=100.0,
+            help="Macros below scale from the per-100g values at save time.",
+        )
+        factor = portion_g / 100.0
+        scaled_kcal = _scaled(prefill["kcal_per_100g"], factor)
+        scaled_p = _scaled(prefill.get("protein_per_100g"), factor)
+        scaled_c = _scaled(prefill.get("carbs_per_100g"), factor)
+        scaled_f = _scaled(prefill.get("fat_per_100g"), factor)
+        st.caption(
+            f"At {int(portion_g)} g → {scaled_kcal:.0f} kcal · "
+            f"P {scaled_p:.1f} · C {scaled_c:.1f} · F {scaled_f:.1f}"
+        )
+    else:
+        portion_g = None
+        c3, c4, c5, c6 = st.columns(4)
+        scaled_kcal = c3.number_input("kcal", min_value=0.0, step=10.0, value=0.0)
+        scaled_p = c4.number_input("protein (g)", min_value=0.0, step=1.0, value=0.0)
+        scaled_c = c5.number_input("carbs (g)", min_value=0.0, step=1.0, value=0.0)
+        scaled_f = c6.number_input("fat (g)", min_value=0.0, step=1.0, value=0.0)
     notes = st.text_area("Notes", height=70)
     submitted = st.form_submit_button("Save entry", type="primary")
     if submitted:
@@ -62,17 +192,18 @@ with st.form("food_entry_form", clear_on_submit=True):
                     day=entry_date,
                     description=description.strip(),
                     meal=meal,
-                    kcal=kcal or None,
-                    protein_g=protein or None,
-                    carbs_g=carbs or None,
-                    fat_g=fat or None,
+                    kcal=scaled_kcal or None,
+                    protein_g=scaled_p or None,
+                    carbs_g=scaled_c or None,
+                    fat_g=scaled_f or None,
                     notes=notes.strip() or None,
                 )
             logger.info(
-                "Added food entry: %s on %s (%s kcal)",
-                description, entry_date.isoformat(), kcal,
+                "Added food entry: %s on %s (%.0f kcal, prefill=%s)",
+                description, entry_date.isoformat(), scaled_kcal, bool(prefill),
             )
             st.success(f"Saved {description} on {entry_date.isoformat()}.")
+            _clear_prefill()
             st.rerun()
 
 
