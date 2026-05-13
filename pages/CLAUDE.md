@@ -12,7 +12,12 @@ pages/
   2_Trends.py           # Charts multi-dia + period deltas.
   3_Activities.py       # Lista de atividades com filtros por tipo/data.
   4_Training.py         # Editor de plano semanal + log de sessão + plan vs actual.
+  5_Food.py             # Entry form + per-day totals + range trends de kcal/macros.
 ```
+
+A Today page (`app.py`) também concatena dados manuais: além do bloco
+Garmin, mostra o slot do plano semanal do dia, sessões logadas e totais de
+food do dia.
 
 Streamlit auto-descobre arquivos sob `pages/` e os ordena pelo prefixo
 numérico do filename — `2_Trends.py` aparece como segundo item na sidebar.
