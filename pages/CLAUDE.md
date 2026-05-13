@@ -11,6 +11,7 @@ app.py                  # Landing — "Today" (raiz do projeto, não desta pasta
 pages/
   2_Trends.py           # Charts multi-dia + period deltas.
   3_Activities.py       # Lista de atividades com filtros por tipo/data.
+  4_Training.py         # Editor de plano semanal + log de sessão + plan vs actual.
 ```
 
 Streamlit auto-descobre arquivos sob `pages/` e os ordena pelo prefixo
@@ -63,6 +64,22 @@ numérico do filename — `2_Trends.py` aparece como segundo item na sidebar.
 4. Atualiza este `CLAUDE.md` se a página introduzir um padrão novo
    (ex.: edit-in-place via `st.data_editor`, filtros multi-select, etc.).
 5. Atualiza a seção "Layout" do root `CLAUDE.md` listando o novo arquivo.
+
+## Páginas com escrita — pattern (training, food)
+
+Páginas que mutam estado seguem essa receita:
+
+- Forms via `st.form(...)` + `st.form_submit_button(...)` pra submissão atômica.
+  Valida (`activity_type` não pode ser vazio, etc.) antes de chamar o
+  `repository`.
+- Mutação só via `fitme.repository.*` — nada de `conn.execute("INSERT ...")`
+  na página.
+- Depois de sucesso, `st.success(...)` curto + `st.rerun()` pra refletir o
+  estado novo no próximo render.
+- Pra delete inline numa lista, usa `key=f"del_<table>_{id}"` no
+  `st.button(...)` pra cada linha ter uma chave única.
+- Lê com `queries.*`; cada bloco abre seu próprio `with connect() as conn:`
+  (não tenta passar a connection entre seções — Streamlit não persiste).
 
 ## Range pickers — pattern compartilhado
 
