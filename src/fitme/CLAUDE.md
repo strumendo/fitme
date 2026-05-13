@@ -37,7 +37,7 @@ O Garmin Connect **não** é chamado em cada render da dashboard. O modelo é:
 
 ## Schema — versão atual e tabelas
 
-`SCHEMA_VERSION` atual: **3**.
+`SCHEMA_VERSION` atual: **4**.
 
 | Tabela | Chave | Fonte | Notas |
 | --- | --- | --- | --- |
@@ -52,6 +52,7 @@ O Garmin Connect **não** é chamado em cada render da dashboard. O modelo é:
 | `training_plan` | `plan_id` | manual (UI) | template semanal versionado por `effective_from`; UNIQUE(`effective_from`, `weekday`, `slot`) |
 | `training_log` | `log_id` | manual (UI) | sessão registrada à mão; `garmin_activity_id` opcional referencia `activities.activity_id` |
 | `food_log` | `food_id` | manual (UI) | entrada por refeição com kcal + macros (protein/carbs/fat) |
+| `exercise_set` | `set_id` | manual (UI) | set de musculação atrelado a um `training_log.log_id`; `set_number` auto-incrementado por (log_id, exercise_name) |
 
 ## Schema migrations — disciplina
 
@@ -112,6 +113,10 @@ escrevem direto via SQL — chamam funções daqui.
 - Funções são `insert_<table>`, `update_<table>(id, ...)`, `delete_<table>(id)`.
   `training_plan` usa `upsert_training_plan_slot(...)` porque a UNIQUE
   constraint em (`effective_from`, `weekday`, `slot`) torna o save idempotente.
+- `exercise_set` não tem `update_*` — fase 7 usa delete + re-add (mesma
+  decisão do food log antes do edit ganhar inline form). `insert_exercise_set`
+  computa `set_number` no SQL via `MAX + 1` por `(log_id, exercise_name)`,
+  então a UI não precisa rastrear.
 - Argumentos opcionais ficam keyword-only com default `None` (forms da UI
   passam ou não passam macros / notes; SQL guarda `NULL`).
 - `created_at` / `updated_at` são preenchidos via `_now_iso()` (mesmo formato

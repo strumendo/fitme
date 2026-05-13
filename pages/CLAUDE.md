@@ -94,6 +94,12 @@ Páginas que mutam estado seguem essa receita:
 - Lê com `queries.*`; cada bloco abre seu próprio `with connect() as conn:`
   (não tenta passar a connection entre seções — Streamlit não persiste).
 
+Cada sessão logada no `4_Training.py` também tem um bloco "Sets" embutido
+no expander: lista os `exercise_set` filhos via `queries.exercise_set_for_log`,
+botão de delete por set, e um form curto pra adicionar set novo (exercise
+text input + caption com os últimos 90d de nomes pra reutilizar, weight kg,
+reps, RPE). Edit é via delete + re-add.
+
 ## Range pickers — pattern compartilhado
 
 Trends e Activities usam o mesmo padrão de seletor de range:
