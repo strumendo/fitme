@@ -1,6 +1,6 @@
 # Phase 7 — Workout detail: sets × reps × load
 
-Status: in progress
+Status: done
 Last updated: 2026-05-13
 
 ## Goal
@@ -167,15 +167,15 @@ Mirrors the structure of `2_Trends.py` for familiarity:
 
 ## Acceptance
 
-- [ ] Migration v4 applies cleanly on an existing DB (idempotent).
-- [ ] Logging a strength session, then adding three sets of "Bench Press"
+- [x] Migration v4 applies cleanly on an existing DB (idempotent).
+- [x] Logging a strength session, then adding three sets of "Bench Press"
       with different weights/reps, persists them with set_numbers 1, 2, 3.
-- [ ] Adding sets for a second exercise within the same session restarts
+- [x] Adding sets for a second exercise within the same session restarts
       set_numbers at 1 for that exercise.
-- [ ] Delete on a set row removes it from the DB and the table.
-- [ ] `8_Strength.py` shows the three charts and the recent-sets table
+- [x] Delete on a set row removes it from the DB and the table.
+- [x] `8_Strength.py` shows the three charts and the recent-sets table
       for a chosen exercise over the last 30 days.
-- [ ] No regressions in existing pages (`ruff check` clean; `streamlit
+- [x] No regressions in existing pages (`ruff check` clean; `streamlit
       run app.py` boots cleanly).
 
 ## Open questions
