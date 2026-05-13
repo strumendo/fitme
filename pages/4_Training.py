@@ -299,21 +299,61 @@ for i in range(total_days):
         if logged:
             st.markdown("**Logged sessions**")
             for row in logged:
-                cols = st.columns([3, 1, 1, 3, 1])
-                cols[0].write(row["activity_type"])
-                cols[1].write(
-                    f"{row['duration_min']} min" if row["duration_min"] else "—"
+                summary = (
+                    f"{row['activity_type']} — "
+                    f"{row['duration_min'] or '—'} min, "
+                    f"effort {row['perceived_effort'] or '—'}"
                 )
-                cols[2].write(
-                    f"effort {row['perceived_effort']}"
-                    if row["perceived_effort"] else "—"
-                )
-                cols[3].write(row["notes"] or "")
-                if cols[4].button("Delete", key=f"del_log_{row['log_id']}"):
-                    with connect() as conn:
-                        repository.delete_training_log(conn, row["log_id"])
-                    logger.info("Deleted training_log %s", row["log_id"])
-                    st.rerun()
+                with st.expander(summary, expanded=False):
+                    with st.form(f"edit_log_{row['log_id']}"):
+                        e_type = st.text_input(
+                            "Activity type",
+                            value=row["activity_type"],
+                            key=f"log_type_{row['log_id']}",
+                        )
+                        ec1, ec2 = st.columns(2)
+                        e_duration = ec1.number_input(
+                            "Duration (min)",
+                            min_value=0, max_value=600, step=5,
+                            value=int(row["duration_min"] or 0),
+                            key=f"log_dur_{row['log_id']}",
+                        )
+                        e_effort = ec2.slider(
+                            "Perceived effort", 1, 10,
+                            int(row["perceived_effort"] or 5),
+                            key=f"log_eff_{row['log_id']}",
+                        )
+                        e_notes = st.text_area(
+                            "Notes",
+                            value=row["notes"] or "",
+                            height=60,
+                            key=f"log_notes_{row['log_id']}",
+                        )
+                        bc1, bc2 = st.columns(2)
+                        save_clicked = bc1.form_submit_button(
+                            "Save", type="primary"
+                        )
+                        delete_clicked = bc2.form_submit_button("Delete")
+                        if save_clicked:
+                            if not e_type.strip():
+                                st.error("Activity type is required.")
+                            else:
+                                with connect() as conn:
+                                    repository.update_training_log(
+                                        conn, row["log_id"],
+                                        activity_type=e_type.strip(),
+                                        duration_min=int(e_duration) or None,
+                                        perceived_effort=int(e_effort),
+                                        notes=e_notes.strip() or None,
+                                        garmin_activity_id=row["garmin_activity_id"],
+                                    )
+                                logger.info("Updated training_log %s", row["log_id"])
+                                st.rerun()
+                        if delete_clicked:
+                            with connect() as conn:
+                                repository.delete_training_log(conn, row["log_id"])
+                            logger.info("Deleted training_log %s", row["log_id"])
+                            st.rerun()
         else:
             st.caption("No logged session.")
         if acts:
