@@ -222,3 +222,55 @@ def update_food_log(
 
 def delete_food_log(conn: sqlite3.Connection, food_id: int) -> None:
     conn.execute("DELETE FROM food_log WHERE food_id = ?", (food_id,))
+
+
+# ---------------------------------------------------------------------------
+# exercise_set
+# ---------------------------------------------------------------------------
+
+def insert_exercise_set(
+    conn: sqlite3.Connection,
+    *,
+    log_id: int,
+    exercise_name: str,
+    weight_kg: float | None = None,
+    reps: int | None = None,
+    rpe: float | None = None,
+    notes: str | None = None,
+) -> int:
+    """Append a set to ``log_id`` for ``exercise_name``.
+
+    ``set_number`` is auto-assigned as the next number for this
+    ``(log_id, exercise_name)`` pair so the page doesn't have to track it.
+    """
+    row = conn.execute(
+        "SELECT COALESCE(MAX(set_number), 0) + 1 "
+        "FROM exercise_set WHERE log_id = ? AND exercise_name = ?",
+        (log_id, exercise_name),
+    ).fetchone()
+    set_number = int(row[0])
+    now = _now_iso()
+    cur = conn.execute(
+        """
+        INSERT INTO exercise_set
+            (log_id, exercise_name, set_number, weight_kg, reps, rpe,
+             notes, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            log_id,
+            exercise_name,
+            set_number,
+            weight_kg,
+            reps,
+            rpe,
+            notes,
+            now,
+            now,
+        ),
+    )
+    return cur.lastrowid or 0
+
+
+def delete_exercise_set(conn: sqlite3.Connection, set_id: int) -> None:
+    conn.execute("DELETE FROM exercise_set WHERE set_id = ?", (set_id,))

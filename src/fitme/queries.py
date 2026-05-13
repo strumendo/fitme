@@ -204,3 +204,52 @@ def food_macros_summary(
         (start.isoformat(), end.isoformat()),
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+def exercise_set_for_log(
+    conn: sqlite3.Connection, log_id: int
+) -> list[dict]:
+    """Return sets logged under ``log_id``, ordered by exercise + set number."""
+    rows = conn.execute(
+        "SELECT * FROM exercise_set WHERE log_id = ? "
+        "ORDER BY exercise_name, set_number",
+        (log_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def exercise_names(
+    conn: sqlite3.Connection, start: date, end: date
+) -> list[str]:
+    """Distinct exercise names with sets logged in ``[start, end]``, sorted."""
+    rows = conn.execute(
+        """
+        SELECT DISTINCT s.exercise_name
+        FROM exercise_set s
+        JOIN training_log t ON s.log_id = t.log_id
+        WHERE t.date BETWEEN ? AND ?
+        ORDER BY s.exercise_name
+        """,
+        (start.isoformat(), end.isoformat()),
+    ).fetchall()
+    return [r["exercise_name"] for r in rows]
+
+
+def exercise_history(
+    conn: sqlite3.Connection,
+    exercise_name: str,
+    start: date,
+    end: date,
+) -> list[dict]:
+    """Sets of ``exercise_name`` over ``[start, end]`` with the session date."""
+    rows = conn.execute(
+        """
+        SELECT s.*, t.date AS date
+        FROM exercise_set s
+        JOIN training_log t ON s.log_id = t.log_id
+        WHERE s.exercise_name = ? AND t.date BETWEEN ? AND ?
+        ORDER BY t.date ASC, s.set_number ASC
+        """,
+        (exercise_name, start.isoformat(), end.isoformat()),
+    ).fetchall()
+    return [dict(r) for r in rows]

@@ -20,6 +20,8 @@ from fitme.db import connect
 from fitme.logging_config import setup as setup_logging
 from fitme.queries import (
     activities_range,
+    exercise_names,
+    exercise_set_for_log,
     plan_for_date,
     training_log_range,
     training_plan_versions,
@@ -245,6 +247,8 @@ with connect() as conn:
         d.isoformat(): plan_for_date(conn, d)
         for d in (start + timedelta(days=i) for i in range((end - start).days + 1))
     }
+    sets_by_log = {row["log_id"]: exercise_set_for_log(conn, row["log_id"]) for row in logs}
+    recent_exercises = exercise_names(conn, TODAY - timedelta(days=90), TODAY)
 
 logs_by_date: dict[str, list[dict]] = {}
 for row in logs:
@@ -354,6 +358,83 @@ for i in range(total_days):
                                 repository.delete_training_log(conn, row["log_id"])
                             logger.info("Deleted training_log %s", row["log_id"])
                             st.rerun()
+                    # --- Sets block ---
+                    session_sets = sets_by_log.get(row["log_id"], [])
+                    st.markdown("**Sets**")
+                    if session_sets:
+                        sets_df = pd.DataFrame(
+                            [
+                                {
+                                    "exercise": s["exercise_name"],
+                                    "#": s["set_number"],
+                                    "kg": s["weight_kg"],
+                                    "reps": s["reps"],
+                                    "rpe": s["rpe"],
+                                }
+                                for s in session_sets
+                            ]
+                        )
+                        st.dataframe(sets_df, use_container_width=True, hide_index=True)
+                        del_cols = st.columns(min(len(session_sets), 6) or 1)
+                        for idx, s in enumerate(session_sets):
+                            col = del_cols[idx % len(del_cols)]
+                            if col.button(
+                                f"× {s['exercise_name']} #{s['set_number']}",
+                                key=f"del_set_{s['set_id']}",
+                                use_container_width=True,
+                            ):
+                                with connect() as conn:
+                                    repository.delete_exercise_set(conn, s["set_id"])
+                                logger.info("Deleted exercise_set %s", s["set_id"])
+                                st.rerun()
+                    else:
+                        st.caption("No sets yet — add the first one below.")
+                    with st.form(f"add_set_form_{row['log_id']}", clear_on_submit=True):
+                        sc1, sc2, sc3, sc4 = st.columns([3, 1, 1, 1])
+                        exercise_input = sc1.text_input(
+                            "Exercise",
+                            placeholder="Bench Press, Squat…",
+                            key=f"set_ex_{row['log_id']}",
+                        )
+                        weight_input = sc2.number_input(
+                            "kg", min_value=0.0, max_value=500.0,
+                            step=2.5, value=0.0,
+                            key=f"set_kg_{row['log_id']}",
+                        )
+                        reps_input = sc3.number_input(
+                            "reps", min_value=0, max_value=100, step=1, value=0,
+                            key=f"set_reps_{row['log_id']}",
+                        )
+                        rpe_input = sc4.number_input(
+                            "RPE", min_value=0.0, max_value=10.0,
+                            step=0.5, value=0.0,
+                            key=f"set_rpe_{row['log_id']}",
+                        )
+                        if recent_exercises:
+                            st.caption(
+                                "Recent: " + ", ".join(recent_exercises[:8])
+                            )
+                        add_clicked = st.form_submit_button(
+                            "Add set", type="primary"
+                        )
+                        if add_clicked:
+                            if not exercise_input.strip():
+                                st.error("Exercise name is required.")
+                            else:
+                                with connect() as conn:
+                                    repository.insert_exercise_set(
+                                        conn,
+                                        log_id=row["log_id"],
+                                        exercise_name=exercise_input.strip(),
+                                        weight_kg=weight_input or None,
+                                        reps=int(reps_input) or None,
+                                        rpe=rpe_input or None,
+                                    )
+                                logger.info(
+                                    "Added set: %s @ log %s",
+                                    exercise_input, row["log_id"],
+                                )
+                                st.rerun()
         else:
             st.caption("No logged session.")
         if acts:
