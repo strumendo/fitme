@@ -10,6 +10,7 @@ for one phase. Status is tracked in the header of each file.
 | 3 | Expanded Garmin metrics | done | [03-more-garmin.md](03-more-garmin.md) |
 | 4 | Manual inputs — training + food | done | [04-manual-inputs.md](04-manual-inputs.md) |
 | 5 | Export & backup of fitme.db | done | [05-export-backup.md](05-export-backup.md) |
+| 6 | Open Food Facts lookup | done | [06-open-food-facts.md](06-open-food-facts.md) |
 
 ## Why this order
 

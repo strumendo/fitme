@@ -19,6 +19,7 @@ src/fitme/
   analysis.py       # Transforms pandas usadas pelas pages.
   ingest.py         # CLI + funções ingest_* idempotentes.
   export.py         # CLI + funções de export CSV / snapshot SQLite.
+  openfoodfacts.py  # Cliente fino sobre a API pública do Open Food Facts.
 ```
 
 ## Data flow
@@ -125,6 +126,20 @@ escrevem direto via SQL — chamam funções daqui.
 - Páginas Streamlit **não** chamam métodos do `garminconnect.Garmin`
   diretamente — passam pelo wrapper. Isso centraliza caching / retry /
   logging quando a gente quiser adicionar.
+
+## Open Food Facts wrappers
+
+- `openfoodfacts.py` é o equivalente do `garmin.py` pra API pública do OFF.
+  Usa stdlib `urllib.request` (sem dep nova).
+- API pública: `search(query, lang="pt", page_size=10)` e
+  `lookup_barcode(code)`. Ambas devolvem dicts normalizados — chaves
+  `code`, `name`, `brand`, `kcal_per_100g`, `protein_per_100g`,
+  `carbs_per_100g`, `fat_per_100g`, `image_url`.
+- Falhas (timeout, sem rede, JSON ruim) viram `[]` / `None` — nunca
+  propagam exceção pra UI. Log via `logger.warning` / `logger.exception`.
+- Caching é responsabilidade da UI (`@st.cache_data(ttl=86_400)` na
+  `5_Food.py`). Mantém o módulo testável sem Streamlit.
+- User-Agent identifica o app (`fitme/0.1`). OFF pede isso em clientes.
 
 ## Commands de domínio
 
