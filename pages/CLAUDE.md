@@ -13,6 +13,7 @@ pages/
   3_Activities.py       # Lista de atividades com filtros por tipo/data.
   4_Training.py         # Editor de plano semanal + log de sessão + plan vs actual.
   5_Food.py             # Entry form + per-day totals + range trends de kcal/macros.
+  8_Strength.py         # Progressão por exercício: max kg, volume, Epley 1RM.
   9_Backup.py           # Download snapshot SQLite + bundle CSV; lê via fitme.export.
 ```
 

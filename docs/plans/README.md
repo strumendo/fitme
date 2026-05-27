@@ -11,7 +11,7 @@ for one phase. Status is tracked in the header of each file.
 | 4 | Manual inputs — training + food | done | [04-manual-inputs.md](04-manual-inputs.md) |
 | 5 | Export & backup of fitme.db | done | [05-export-backup.md](05-export-backup.md) |
 | 6 | Open Food Facts lookup | done | [06-open-food-facts.md](06-open-food-facts.md) |
-| 7 | Workout detail — sets × reps × load | in progress | [07-workout-detail.md](07-workout-detail.md) |
+| 7 | Workout detail — sets × reps × load | done | [07-workout-detail.md](07-workout-detail.md) |
 
 ## Why this order
 
