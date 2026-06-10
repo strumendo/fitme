@@ -109,7 +109,12 @@ program" que chama `coach.generate_program` (LLM). O programa gerado fica em
 o racional + um bloco por dia da semana. Sem `ANTHROPIC_API_KEY` o snapshot
 ainda renderiza e só a geração é desabilitada (`st.warning` + `st.stop`).
 `CoachError` vira `st.error`. Exige uma meta setada antes (senão `st.info` +
-`st.stop`).
+`st.stop`). Abaixo do programa tem um "Save this week as my plan": grava os
+7 dias em `training_plan` via `repository.upsert_training_plan_slot`
+(`effective_from = hoje`, nova versão), mapeando `focus`→`activity_type` e
+achatando descrição + exercícios num `description`. Como o `app.py` (Today)
+já lê o slot do dia via `plan_for_date`, salvar faz a sessão recomendada
+aparecer no Today sem mudança no `app.py`.
 
 Cada sessão logada no `4_Training.py` também tem um bloco "Sets" embutido
 no expander: lista os `exercise_set` filhos via `queries.exercise_set_for_log`,

@@ -15,7 +15,7 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 
-from fitme import coach, config
+from fitme import coach, config, repository
 from fitme.db import connect
 from fitme.logging_config import setup as setup_logging
 from fitme.queries import active_goal
@@ -32,6 +32,23 @@ st.title("Coach")
 
 WEEKDAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 TODAY = date.today()
+
+
+def _plan_description(day: dict) -> str:
+    """Flatten a program day into a single plan-slot description.
+
+    The plan's ``description`` is one text field, so fold the day's
+    description and per-exercise set/rep/load detail into it — otherwise the
+    exercise prescription would be lost when saving to ``training_plan``.
+    """
+    parts: list[str] = []
+    if day.get("description"):
+        parts.append(day["description"])
+    for e in day.get("exercises") or []:
+        parts.append(
+            f"{e['name']} {e['sets']}×{e['reps']} @ {e['suggested_load']}"
+        )
+    return " — ".join(parts)
 
 with connect() as conn:
     goal = active_goal(conn)
@@ -142,3 +159,25 @@ if program:
                 ]
             )
             st.dataframe(ex_df, use_container_width=True, hide_index=True)
+
+    # ----- Save as plan -----
+    st.divider()
+    st.caption(
+        "Saving writes this week into your training plan as a new version "
+        f"effective {TODAY.isoformat()} (older versions are kept). The Today "
+        "page then shows each day's recommended session."
+    )
+    if st.button("Save this week as my plan"):
+        with connect() as conn:
+            for day in week:
+                repository.upsert_training_plan_slot(
+                    conn,
+                    effective_from=TODAY,
+                    weekday=day["weekday"],
+                    slot=0,
+                    activity_type=day["focus"],
+                    description=_plan_description(day) or None,
+                    target_duration_min=day.get("target_duration_min") or None,
+                )
+        logger.info("Saved generated program as plan effective %s", TODAY)
+        st.success("Saved as your training plan.")

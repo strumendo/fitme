@@ -88,14 +88,16 @@ prompt-cacheable and auditable):
   program" button → renders the weekly program (table per day + the
   model's rationale). Handles a missing/invalid `ANTHROPIC_API_KEY`
   gracefully (clear `st.error`, no traceback).
+- **Save as plan** (PR 3) — a button writes the generated week into
+  `training_plan` as a new version (`effective_from = today`), mapping
+  `focus`→`activity_type` and flattening description + exercises into the
+  slot's `description`. The Today page (`app.py`) already reads the day's
+  slot via `plan_for_date`, so the recommended session surfaces there with
+  no `app.py` change.
 
 **Out (deferred):**
 - Free-text goals (needs the LLM path but adds prompt-injection / scope
   surface — revisit once presets are in use).
-- **Writing the generated program into `training_plan`** — render-only in
-  v1; a follow-up PR can add a "save as plan" button (see Open questions).
-- Today-page surfacing of "today's recommended session" — small future
-  add once the program shape is settled.
 - Food/macro recommendations — this phase is training only.
 - Caching/persisting generated programs — regenerate on demand; a single
   call is cheap and the inputs drift daily.
@@ -141,9 +143,9 @@ prompt-cacheable and auditable):
 2. **PR 2 — LLM + Coach page.** ✅ `uv add anthropic`,
    `coach.generate_program` (Claude call + structured output), the Coach
    page rendering the program, error handling for a missing key.
-3. **PR 3 (optional) — "save as plan".** Turn a generated week into
-   `training_plan` rows, and/or surface today's recommended session on the
-   Today page.
+3. **PR 3 — "save as plan".** ✅ Turn a generated week into `training_plan`
+   rows (new version, `effective_from = today`); the Today page surfaces
+   the day's recommended session for free via `plan_for_date`.
 
 ## Tasks
 
@@ -185,9 +187,9 @@ prompt-cacheable and auditable):
 
 ## Open questions
 
-- **"Save as plan".** Should a generated week overwrite/append into
-  `training_plan` (so the planner + Today page pick it up), or stay
-  render-only? Deferred to PR 3; render-only in v1.
+- **"Save as plan".** Resolved (PR 3): a button appends the generated week
+  as a new `training_plan` version (`effective_from = today`), so the
+  planner and Today page pick it up. Older versions are kept.
 - **Free-text goal.** Presets only for now. If the presets feel too coarse
   once in use, add an optional free-text "notes to the coach" field that
   rides along in the user turn (the LLM path already supports it) — guard
