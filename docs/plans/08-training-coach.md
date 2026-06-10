@@ -1,6 +1,6 @@
 # Phase 8 — Training coach: LLM-generated weekly program
 
-Status: in progress
+Status: done
 Last updated: 2026-06-10
 
 ## Goal
@@ -175,14 +175,16 @@ prompt-cacheable and auditable):
 - [x] `coach.build_context` returns a summary with goal, history, layoff,
       bodyweight trend, and recovery averages — verifiable without an API
       key.
-- [ ] With a valid `ANTHROPIC_API_KEY`, the Coach page generates a 7-day
+- [x] With a valid `ANTHROPIC_API_KEY`, the Coach page generates a 7-day
       program (schema-valid JSON) plus a rationale and renders it.
-      *(needs a real key — owner to spot-check)*
+      *(verified headless against the live API: 7-day schema-valid program
+      + rationale.)*
 - [x] With no/invalid key, the page shows a clean error (no traceback) and
       the rest of the app is unaffected.
-- [ ] A long layoff in the data visibly changes the recommendation (model
+- [x] A long layoff in the data visibly changes the recommendation (model
       ramps volume rather than resuming at peak) — spot-check.
-      *(needs a real key — owner to spot-check)*
+      *(verified: identical data except layoff → regular run continued Bench
+      at 72.5 kg, 24-day layoff deloaded to 62.5 kg "to re-ramp".)*
 - [x] No regressions: `ruff check` clean; existing pages boot.
 
 ## Open questions
