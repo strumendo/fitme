@@ -14,13 +14,21 @@ The goal presets the user can pick from. The active goal lives in the
 """
 from __future__ import annotations
 
+import json
 import logging
 import sqlite3
 from datetime import date, timedelta
 
-from fitme import queries
+from fitme import config, queries
 
 logger = logging.getLogger(__name__)
+
+
+class CoachError(RuntimeError):
+    """Program generation failed (missing key, API error, bad response).
+
+    Carries a user-facing message the Coach page can show via ``st.error``.
+    """
 
 #: Fixed goal presets. The label is what the user picks; it's stored verbatim
 #: in ``training_goal.goal_preset`` and passed to the coach.
@@ -34,6 +42,127 @@ GOAL_PRESETS: tuple[str, ...] = (
 
 HISTORY_LOOKBACK_DAYS = 90
 RECOVERY_LOOKBACK_DAYS = 14
+
+MODEL = "claude-opus-4-8"
+
+#: JSON schema the model's weekly program must conform to. Kept strict
+#: (``additionalProperties: false``, all properties required) for
+#: ``output_config.format``. ``reps`` is a string so it can carry ranges or
+#: "AMRAP"; rest/cardio days use an empty ``exercises`` list and put the work
+#: in ``description``. ``target_duration_min`` is 0 for rest days.
+PROGRAM_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "rationale": {"type": "string"},
+        "week": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "weekday": {"type": "integer", "enum": [0, 1, 2, 3, 4, 5, 6]},
+                    "focus": {"type": "string"},
+                    "description": {"type": "string"},
+                    "target_duration_min": {"type": "integer"},
+                    "exercises": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "name": {"type": "string"},
+                                "sets": {"type": "integer"},
+                                "reps": {"type": "string"},
+                                "suggested_load": {"type": "string"},
+                            },
+                            "required": ["name", "sets", "reps", "suggested_load"],
+                            "additionalProperties": False,
+                        },
+                    },
+                },
+                "required": [
+                    "weekday", "focus", "description",
+                    "target_duration_min", "exercises",
+                ],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["rationale", "week"],
+    "additionalProperties": False,
+}
+
+SYSTEM_PROMPT = """\
+You are a strength & conditioning coach building one week of training for a \
+single athlete. You receive a JSON summary of their goal, recent training \
+history (90 days, with per-exercise load progression), days since their last \
+session (layoff), bodyweight trend, and Garmin recovery averages (last 14 \
+days). Produce a 7-day program.
+
+Principles:
+- Respect the goal preset (hypertrophy / strength / fat_loss / maintenance / \
+endurance), the available days per week, and the target session length. Fill \
+the remaining days with rest or light activity.
+- After a long layoff (roughly a week or more), ramp volume and load back up \
+rather than resuming at the athlete's previous peak.
+- When recovery signals are poor (low sleep, low body battery, low HRV, high \
+stress), reduce total weekly volume and add recovery.
+- Bias exercise selection toward movements already in the athlete's history, \
+continuing their load progression where it exists. Suggest concrete next \
+loads (e.g. "67.5 kg" or "+2.5 kg from last week").
+- For rest days use focus "Rest", an empty exercises list, and \
+target_duration_min 0. For cardio/conditioning days, describe the work in \
+the description and leave exercises empty.
+- weekday is 0=Monday … 6=Sunday.
+
+Keep the rationale to a few sentences: what drove the week's shape (goal, \
+layoff, recovery, progression).\
+"""
+
+
+def generate_program(context: dict) -> dict:
+    """Send ``context`` to Claude and return a validated weekly program.
+
+    The only place that touches the network and ``ANTHROPIC_API_KEY``. Raises
+    :class:`CoachError` with a clean message on a missing key, an API failure,
+    or an unreadable response — the page surfaces it via ``st.error``.
+    """
+    import anthropic  # local import: keeps the data half import-light
+
+    api_key = config.load().anthropic_api_key
+    if not api_key:
+        raise CoachError(
+            "ANTHROPIC_API_KEY is not set. Add it to your .env to generate "
+            "a program."
+        )
+
+    client = anthropic.Anthropic(api_key=api_key)
+    try:
+        response = client.messages.create(
+            model=MODEL,
+            max_tokens=8000,
+            thinking={"type": "adaptive"},
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": json.dumps(context)}],
+            output_config={
+                "format": {"type": "json_schema", "schema": PROGRAM_SCHEMA}
+            },
+        )
+    except anthropic.AuthenticationError as exc:
+        logger.exception("Anthropic auth failed")
+        raise CoachError(
+            "Anthropic rejected the API key. Check ANTHROPIC_API_KEY."
+        ) from exc
+    except anthropic.APIError as exc:
+        logger.exception("Anthropic API call failed")
+        raise CoachError(f"Program generation failed: {exc}") from exc
+
+    text = next((b.text for b in response.content if b.type == "text"), None)
+    if not text:
+        raise CoachError("The model returned no program. Try again.")
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as exc:
+        logger.exception("Program response was not valid JSON: %s", text[:500])
+        raise CoachError("The model returned an unreadable program.") from exc
 
 
 def build_context(

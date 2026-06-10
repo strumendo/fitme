@@ -163,9 +163,14 @@ pra metade dos dados ser testável sem rede:
   Devolve dict JSON-serializável. As queries de apoio (`active_goal`,
   `days_since_last_session`, `training_type_mix`, `recovery_averages`) são
   reads agregados — não seguem o padrão `get_/range`, e tudo bem.
-- `generate_program(context)` (PR 2) — chamará o Claude (`anthropic` SDK,
-  `model="claude-opus-4-8"`, adaptive thinking, `output_config.format`) e é
-  o único ponto que toca rede + `ANTHROPIC_API_KEY`.
+- `generate_program(context)` — chama o Claude (`anthropic` SDK,
+  `model="claude-opus-4-8"`, adaptive thinking, saída estruturada via
+  `output_config.format` com `PROGRAM_SCHEMA`) e devolve o programa semanal
+  validado. **Único ponto que toca rede + `ANTHROPIC_API_KEY`.** `import
+  anthropic` é local pra metade dos dados ficar import-light. Falhas (chave
+  ausente, auth, API, JSON ruim) viram `CoachError` com mensagem limpa pra
+  UI mostrar via `st.error` — nunca propaga traceback. `SYSTEM_PROMPT` é
+  congelado (sem dados) pra cachear; o resumo vai no user turn.
 
 ## Commands de domínio
 
