@@ -12,7 +12,7 @@ from typing import Callable
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 def _current_version(conn: sqlite3.Connection) -> int:
@@ -199,11 +199,27 @@ def _migrate_v4(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_v5(conn: sqlite3.Connection) -> None:
+    conn.executescript(
+        """
+        CREATE TABLE training_goal (
+            goal_id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            goal_preset        TEXT NOT NULL,
+            days_per_week      INTEGER,
+            session_length_min INTEGER,
+            created_at         TEXT NOT NULL
+        );
+        CREATE INDEX training_goal_created_idx ON training_goal(created_at);
+        """
+    )
+
+
 _MIGRATIONS: dict[int, Callable[[sqlite3.Connection], None]] = {
     1: _migrate_v1,
     2: _migrate_v2,
     3: _migrate_v3,
     4: _migrate_v4,
+    5: _migrate_v5,
 }
 
 

@@ -17,6 +17,7 @@ class Settings:
     garmin_password: str | None
     garmin_tokens_path: Path
     db_path: Path
+    anthropic_api_key: str | None
 
 
 def load() -> Settings:
@@ -30,4 +31,5 @@ def load() -> Settings:
         garmin_password=os.getenv("GARMIN_PASSWORD"),
         garmin_tokens_path=Path(tokens).expanduser(),
         db_path=db,
+        anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"),
     )

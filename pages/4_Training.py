@@ -16,10 +16,12 @@ import pandas as pd
 import streamlit as st
 
 from fitme import repository
+from fitme.coach import GOAL_PRESETS
 from fitme.db import connect
 from fitme.logging_config import setup as setup_logging
 from fitme.queries import (
     activities_range,
+    active_goal,
     exercise_names,
     exercise_set_for_log,
     plan_for_date,
@@ -41,6 +43,66 @@ TODAY = date.today()
 DEFAULT_DAYS = 14
 
 WEEKDAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+
+# ---------------------------------------------------------------------------
+# Goal
+# ---------------------------------------------------------------------------
+
+st.header("Goal")
+st.caption(
+    "Drives the weekly program on the Coach page. Setting a goal records a "
+    "new version; the latest is the active one."
+)
+
+with connect() as conn:
+    goal = active_goal(conn)
+
+if goal:
+    days = goal["days_per_week"] or "—"
+    length = goal["session_length_min"]
+    st.markdown(
+        f"Active goal: **{goal['goal_preset']}** · {days} days/week"
+        + (f" · ~{length} min/session" if length else "")
+    )
+else:
+    st.info("No goal set yet. Pick one below.")
+
+with st.expander("Set goal", expanded=not goal):
+    with st.form("goal_form", clear_on_submit=False):
+        g1, g2, g3 = st.columns(3)
+        preset = g1.selectbox(
+            "Preset",
+            options=GOAL_PRESETS,
+            index=(
+                GOAL_PRESETS.index(goal["goal_preset"])
+                if goal and goal["goal_preset"] in GOAL_PRESETS
+                else 0
+            ),
+        )
+        days_per_week = g2.number_input(
+            "Days/week", min_value=1, max_value=7, step=1,
+            value=int(goal["days_per_week"]) if goal and goal["days_per_week"] else 3,
+        )
+        session_length = g3.number_input(
+            "Session length (min)", min_value=0, max_value=240, step=5,
+            value=int(goal["session_length_min"])
+            if goal and goal["session_length_min"] else 60,
+        )
+        if st.form_submit_button("Save goal", type="primary"):
+            with connect() as conn:
+                repository.insert_training_goal(
+                    conn,
+                    goal_preset=preset,
+                    days_per_week=int(days_per_week),
+                    session_length_min=int(session_length) or None,
+                )
+            logger.info(
+                "Saved training goal: %s (%s d/wk, %s min)",
+                preset, days_per_week, session_length,
+            )
+            st.success(f"Goal set to {preset}.")
+            st.rerun()
 
 
 # ---------------------------------------------------------------------------

@@ -20,6 +20,7 @@ src/fitme/
   ingest.py         # CLI + funções ingest_* idempotentes.
   export.py         # CLI + funções de export CSV / snapshot SQLite.
   openfoodfacts.py  # Cliente fino sobre a API pública do Open Food Facts.
+  coach.py          # build_context() resume o DB; generate_program() (LLM) chama o Claude.
 ```
 
 ## Data flow
@@ -37,7 +38,7 @@ O Garmin Connect **não** é chamado em cada render da dashboard. O modelo é:
 
 ## Schema — versão atual e tabelas
 
-`SCHEMA_VERSION` atual: **4**.
+`SCHEMA_VERSION` atual: **5**.
 
 | Tabela | Chave | Fonte | Notas |
 | --- | --- | --- | --- |
@@ -53,6 +54,7 @@ O Garmin Connect **não** é chamado em cada render da dashboard. O modelo é:
 | `training_log` | `log_id` | manual (UI) | sessão registrada à mão; `garmin_activity_id` opcional referencia `activities.activity_id` |
 | `food_log` | `food_id` | manual (UI) | entrada por refeição com kcal + macros (protein/carbs/fat) |
 | `exercise_set` | `set_id` | manual (UI) | set de musculação atrelado a um `training_log.log_id`; `set_number` auto-incrementado por (log_id, exercise_name) |
+| `training_goal` | `goal_id` | manual (UI) | objetivo do coach (preset + dias/semana + duração); append-only, linha mais recente é a ativa (como `training_plan`) |
 
 ## Schema migrations — disciplina
 
@@ -146,6 +148,25 @@ escrevem direto via SQL — chamam funções daqui.
   `5_Food.py`). Mantém o módulo testável sem Streamlit.
 - User-Agent identifica o app (`fitme/0.1`). OFF pede isso em clientes.
 
+## Coach (`coach.py`)
+
+Motor de recomendação de treino (fase 8). Duas responsabilidades separadas
+pra metade dos dados ser testável sem rede:
+
+- `GOAL_PRESETS` — fonte única dos presets de objetivo
+  (`hypertrophy` / `strength` / `fat_loss` / `maintenance` / `endurance`).
+  A página Training importa daqui pro selectbox.
+- `build_context(conn, goal, *, today=None)` — monta um resumo
+  determinístico (objetivo, histórico de treino dos 90d com progressão por
+  exercício, layoff, tendência de peso, médias de recovery dos 14d). Só lê
+  via `queries.*`, **sem pandas, sem rede**. `today` é injetável pra teste.
+  Devolve dict JSON-serializável. As queries de apoio (`active_goal`,
+  `days_since_last_session`, `training_type_mix`, `recovery_averages`) são
+  reads agregados — não seguem o padrão `get_/range`, e tudo bem.
+- `generate_program(context)` (PR 2) — chamará o Claude (`anthropic` SDK,
+  `model="claude-opus-4-8"`, adaptive thinking, `output_config.format`) e é
+  o único ponto que toca rede + `ANTHROPIC_API_KEY`.
+
 ## Commands de domínio
 
 Comandos básicos de dev (`uv sync`, `streamlit run`, lint) ficam no root
@@ -178,6 +199,7 @@ Outputs do `fitme.export` caem em `data/exports/<utc-iso>/` (CSV) ou
 | `GARMIN_EMAIL` | — | Login Garmin Connect. Necessário no primeiro auth; depois usa token cacheado. |
 | `GARMIN_PASSWORD` | — | Idem. |
 | `GARMINTOKENS` | `~/.garminconnect` | Onde a lib `garminconnect` cacheia tokens OAuth. |
+| `ANTHROPIC_API_KEY` | — | Chave da API Anthropic. Usada só pela página Coach (programa semanal via LLM). Sem ela o resto do app funciona; só a geração fica desabilitada. |
 
 `LOG_LEVEL` e `FITME_DB_PATH` são globais — documentadas no root.
 

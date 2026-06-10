@@ -11,7 +11,7 @@ app.py                  # Landing — "Today" (raiz do projeto, não desta pasta
 pages/
   2_Trends.py           # Charts multi-dia + period deltas.
   3_Activities.py       # Lista de atividades com filtros por tipo/data.
-  4_Training.py         # Editor de plano semanal + log de sessão + plan vs actual.
+  4_Training.py         # Goal + editor de plano semanal + log de sessão + plan vs actual.
   5_Food.py             # Entry form + per-day totals + range trends de kcal/macros.
   8_Strength.py         # Progressão por exercício: max kg, volume, Epley 1RM.
   9_Backup.py           # Download snapshot SQLite + bundle CSV; lê via fitme.export.
@@ -94,6 +94,12 @@ Páginas que mutam estado seguem essa receita:
   `st.button(...)` pra cada linha ter uma chave única.
 - Lê com `queries.*`; cada bloco abre seu próprio `with connect() as conn:`
   (não tenta passar a connection entre seções — Streamlit não persiste).
+
+O `4_Training.py` abre com uma seção "Goal" (fase 8): mostra o objetivo
+ativo e um form pra setar um novo (preset de `coach.GOAL_PRESETS` +
+dias/semana + duração). Salva via `repository.insert_training_goal`; metas
+são append-only e a linha mais recente é a ativa (lida via
+`queries.active_goal`). É o input do programa semanal gerado na página Coach.
 
 Cada sessão logada no `4_Training.py` também tem um bloco "Sets" embutido
 no expander: lista os `exercise_set` filhos via `queries.exercise_set_for_log`,

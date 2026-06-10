@@ -253,3 +253,94 @@ def exercise_history(
         (exercise_name, start.isoformat(), end.isoformat()),
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+def active_goal(conn: sqlite3.Connection) -> dict | None:
+    """Return the most recently set training goal, or ``None`` if unset."""
+    row = conn.execute(
+        "SELECT * FROM training_goal ORDER BY created_at DESC, goal_id DESC "
+        "LIMIT 1"
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def days_since_last_session(
+    conn: sqlite3.Connection, today: date
+) -> int | None:
+    """Days between ``today`` and the most recent ``training_log`` date.
+
+    ``None`` when nothing has ever been logged. ``0`` means a session was
+    logged today.
+    """
+    row = conn.execute(
+        "SELECT MAX(date) AS last FROM training_log WHERE date <= ?",
+        (today.isoformat(),),
+    ).fetchone()
+    last = row["last"] if row else None
+    if not last:
+        return None
+    return (today - date.fromisoformat(last)).days
+
+
+def training_type_mix(
+    conn: sqlite3.Connection, start: date, end: date
+) -> list[dict]:
+    """Session counts per ``activity_type`` in ``[start, end]``, most first."""
+    rows = conn.execute(
+        """
+        SELECT activity_type, COUNT(*) AS sessions
+        FROM training_log
+        WHERE date BETWEEN ? AND ?
+        GROUP BY activity_type
+        ORDER BY sessions DESC, activity_type
+        """,
+        (start.isoformat(), end.isoformat()),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def recovery_averages(
+    conn: sqlite3.Connection, start: date, end: date
+) -> dict:
+    """Average recovery signals over ``[start, end]`` (NULLs ignored by AVG).
+
+    Returns a flat dict so the coach can summarize recovery without joining
+    four tables itself. Missing tables/rows yield ``None`` values.
+    """
+    sleep = conn.execute(
+        "SELECT AVG(total_seconds) AS s FROM sleep WHERE date BETWEEN ? AND ?",
+        (start.isoformat(), end.isoformat()),
+    ).fetchone()
+    battery = conn.execute(
+        "SELECT AVG(highest) AS hi, AVG(lowest) AS lo "
+        "FROM body_battery WHERE date BETWEEN ? AND ?",
+        (start.isoformat(), end.isoformat()),
+    ).fetchone()
+    stress = conn.execute(
+        "SELECT AVG(avg_level) AS s FROM stress WHERE date BETWEEN ? AND ?",
+        (start.isoformat(), end.isoformat()),
+    ).fetchone()
+    hrv = conn.execute(
+        "SELECT AVG(last_night_avg) AS h FROM hrv WHERE date BETWEEN ? AND ?",
+        (start.isoformat(), end.isoformat()),
+    ).fetchone()
+    avg_sleep_s = sleep["s"] if sleep else None
+    return {
+        "avg_sleep_hours": (
+            round(avg_sleep_s / 3600.0, 1) if avg_sleep_s is not None else None
+        ),
+        "avg_body_battery_high": (
+            round(battery["hi"], 1)
+            if battery and battery["hi"] is not None else None
+        ),
+        "avg_body_battery_low": (
+            round(battery["lo"], 1)
+            if battery and battery["lo"] is not None else None
+        ),
+        "avg_stress": (
+            round(stress["s"], 1) if stress and stress["s"] is not None else None
+        ),
+        "avg_hrv_last_night": (
+            round(hrv["h"], 1) if hrv and hrv["h"] is not None else None
+        ),
+    }
