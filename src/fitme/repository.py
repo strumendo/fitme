@@ -274,3 +274,31 @@ def insert_exercise_set(
 
 def delete_exercise_set(conn: sqlite3.Connection, set_id: int) -> None:
     conn.execute("DELETE FROM exercise_set WHERE set_id = ?", (set_id,))
+
+
+# ---------------------------------------------------------------------------
+# training_goal
+# ---------------------------------------------------------------------------
+
+def insert_training_goal(
+    conn: sqlite3.Connection,
+    *,
+    goal_preset: str,
+    days_per_week: int | None = None,
+    session_length_min: int | None = None,
+) -> int:
+    """Record a goal version. The latest row is the active goal.
+
+    Like ``training_plan``, goals are append-only: setting a new goal inserts
+    a new row, leaving older rows in place so the coach can be re-run against
+    the goal that was active at any point.
+    """
+    cur = conn.execute(
+        """
+        INSERT INTO training_goal
+            (goal_preset, days_per_week, session_length_min, created_at)
+        VALUES (?, ?, ?, ?)
+        """,
+        (goal_preset, days_per_week, session_length_min, _now_iso()),
+    )
+    return cur.lastrowid or 0
