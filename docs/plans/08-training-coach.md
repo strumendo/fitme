@@ -134,11 +134,11 @@ prompt-cacheable and auditable):
 
 ### PR split (per the multi-PR convention for schema+UX phases)
 
-1. **PR 1 — foundations, no network.** Schema v5 (`training_goal`) +
+1. **PR 1 — foundations, no network.** ✅ Schema v5 (`training_goal`) +
    repository helpers + goals UI on the Training page +
    `ANTHROPIC_API_KEY` in config/`.env.example`/docs + `coach.build_context`
    and its supporting queries. Fully testable without an API key.
-2. **PR 2 — LLM + Coach page.** `uv add anthropic`,
+2. **PR 2 — LLM + Coach page.** ✅ `uv add anthropic`,
    `coach.generate_program` (Claude call + structured output), the Coach
    page rendering the program, error handling for a missing key.
 3. **PR 3 (optional) — "save as plan".** Turn a generated week into
@@ -167,19 +167,21 @@ prompt-cacheable and auditable):
 
 ## Acceptance
 
-- [ ] Migration v5 applies cleanly on an existing DB (idempotent).
-- [ ] Setting a goal on the Training page persists a `training_goal` row;
+- [x] Migration v5 applies cleanly on an existing DB (idempotent).
+- [x] Setting a goal on the Training page persists a `training_goal` row;
       the latest row is treated as active.
-- [ ] `coach.build_context` returns a summary with goal, history, layoff,
+- [x] `coach.build_context` returns a summary with goal, history, layoff,
       bodyweight trend, and recovery averages — verifiable without an API
       key.
 - [ ] With a valid `ANTHROPIC_API_KEY`, the Coach page generates a 7-day
       program (schema-valid JSON) plus a rationale and renders it.
-- [ ] With no/invalid key, the page shows a clean error (no traceback) and
+      *(needs a real key — owner to spot-check)*
+- [x] With no/invalid key, the page shows a clean error (no traceback) and
       the rest of the app is unaffected.
 - [ ] A long layoff in the data visibly changes the recommendation (model
       ramps volume rather than resuming at peak) — spot-check.
-- [ ] No regressions: `ruff check` clean; existing pages boot.
+      *(needs a real key — owner to spot-check)*
+- [x] No regressions: `ruff check` clean; existing pages boot.
 
 ## Open questions
 

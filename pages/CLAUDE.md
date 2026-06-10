@@ -13,6 +13,7 @@ pages/
   3_Activities.py       # Lista de atividades com filtros por tipo/data.
   4_Training.py         # Goal + editor de plano semanal + log de sessão + plan vs actual.
   5_Food.py             # Entry form + per-day totals + range trends de kcal/macros.
+  6_Coach.py            # Snapshot dos dados + programa semanal gerado por LLM.
   8_Strength.py         # Progressão por exercício: max kg, volume, Epley 1RM.
   9_Backup.py           # Download snapshot SQLite + bundle CSV; lê via fitme.export.
 ```
@@ -100,6 +101,15 @@ ativo e um form pra setar um novo (preset de `coach.GOAL_PRESETS` +
 dias/semana + duração). Salva via `repository.insert_training_goal`; metas
 são append-only e a linha mais recente é a ativa (lida via
 `queries.active_goal`). É o input do programa semanal gerado na página Coach.
+
+A `6_Coach.py` mostra um snapshot (frequência, layoff, peso, recovery,
+progressão) montado por `coach.build_context`, e um botão "Generate
+program" que chama `coach.generate_program` (LLM). O programa gerado fica em
+`st.session_state["coach_program"]` pra rerun não re-bater na API; render é
+o racional + um bloco por dia da semana. Sem `ANTHROPIC_API_KEY` o snapshot
+ainda renderiza e só a geração é desabilitada (`st.warning` + `st.stop`).
+`CoachError` vira `st.error`. Exige uma meta setada antes (senão `st.info` +
+`st.stop`).
 
 Cada sessão logada no `4_Training.py` também tem um bloco "Sets" embutido
 no expander: lista os `exercise_set` filhos via `queries.exercise_set_for_log`,

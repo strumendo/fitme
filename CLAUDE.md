@@ -15,6 +15,8 @@ desenvolvedor: o dono do repo.
 - SQLite local em `data/fitme.db` como source of truth do dashboard.
 - `garminconnect` (PyPI) como fonte de dados; `python-dotenv` pra `.env`.
 - `pandas` só no caminho UI (analysis + pages), nunca em `queries.py`.
+- `anthropic` (SDK Claude) só no `coach.py` — gera o programa semanal na
+  página Coach. Requer `ANTHROPIC_API_KEY`; sem ela só o Coach desabilita.
 
 ## Layout
 
