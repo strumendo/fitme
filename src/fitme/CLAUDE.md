@@ -21,6 +21,7 @@ src/fitme/
   export.py         # CLI + funções de export CSV / snapshot SQLite.
   openfoodfacts.py  # Cliente fino sobre a API pública do Open Food Facts.
   coach.py          # build_context() resume o DB; generate_program() (LLM) chama o Claude.
+  nutrition.py      # build_context() resume o DB; generate_targets() (LLM) — coach de nutrição.
 ```
 
 ## Data flow
@@ -38,7 +39,7 @@ O Garmin Connect **não** é chamado em cada render da dashboard. O modelo é:
 
 ## Schema — versão atual e tabelas
 
-`SCHEMA_VERSION` atual: **5**.
+`SCHEMA_VERSION` atual: **6**.
 
 | Tabela | Chave | Fonte | Notas |
 | --- | --- | --- | --- |
@@ -55,6 +56,7 @@ O Garmin Connect **não** é chamado em cada render da dashboard. O modelo é:
 | `food_log` | `food_id` | manual (UI) | entrada por refeição com kcal + macros (protein/carbs/fat) |
 | `exercise_set` | `set_id` | manual (UI) | set de musculação atrelado a um `training_log.log_id`; `set_number` auto-incrementado por (log_id, exercise_name) |
 | `training_goal` | `goal_id` | manual (UI) | objetivo do coach (preset + dias/semana + duração); append-only, linha mais recente é a ativa (como `training_plan`) |
+| `nutrition_target` | `target_id` | LLM (Coach nutrição) | meta diária de kcal + P/C/F + rationale + adjustment; append-only, linha mais recente é a ativa (fase 9) |
 
 ## Schema migrations — disciplina
 
@@ -171,6 +173,24 @@ pra metade dos dados ser testável sem rede:
   ausente, auth, API, JSON ruim) viram `CoachError` com mensagem limpa pra
   UI mostrar via `st.error` — nunca propaga traceback. `SYSTEM_PROMPT` é
   congelado (sem dados) pra cachear; o resumo vai no user turn.
+
+## Nutrition coach (`nutrition.py`)
+
+Contraparte do `coach.py` pro lado alimentar (fase 9). Mesmo split:
+
+- `build_context(conn, goal, *, today=None)` — resumo determinístico:
+  objetivo (`training_goal`), tendência de peso multi-semana (28d, com
+  `rate_kg_per_week` — o sinal do loop de ajuste), gasto energético médio do
+  Garmin (`avg_daily_expenditure` sobre `daily_summary.calories_kcal`, 14d —
+  dispensa fórmula de TDEE), ingestão média por dia logado (`intake_averages`,
+  14d) e carga de treino (`training_type_mix`, 28d). Sem pandas, sem rede;
+  `today` injetável. Queries de apoio: `active_nutrition_target`,
+  `avg_daily_expenditure`, `intake_averages`.
+- `generate_targets(context)` (PR 2) — chamará o Claude (mesmo padrão do
+  coach: `claude-opus-4-8`, adaptive thinking, `output_config.format`) e
+  devolverá `{kcal, protein_g, carbs_g, fat_g, rationale, adjustment}`.
+  Único ponto que toca rede + `ANTHROPIC_API_KEY`; falhas viram
+  `NutritionError`.
 
 ## Commands de domínio
 

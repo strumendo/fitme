@@ -344,3 +344,70 @@ def recovery_averages(
             round(hrv["h"], 1) if hrv and hrv["h"] is not None else None
         ),
     }
+
+
+def active_nutrition_target(conn: sqlite3.Connection) -> dict | None:
+    """Return the most recently set nutrition target, or ``None`` if unset."""
+    row = conn.execute(
+        "SELECT * FROM nutrition_target "
+        "ORDER BY created_at DESC, target_id DESC LIMIT 1"
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def avg_daily_expenditure(
+    conn: sqlite3.Connection, start: date, end: date
+) -> float | None:
+    """Average Garmin total daily burn (``daily_summary.calories_kcal``).
+
+    Used as a measured TDEE proxy, so the coach doesn't need height/age/sex
+    for a formula. ``None`` when no summaries are stored in the range.
+    """
+    row = conn.execute(
+        "SELECT AVG(calories_kcal) AS k FROM daily_summary "
+        "WHERE date BETWEEN ? AND ?",
+        (start.isoformat(), end.isoformat()),
+    ).fetchone()
+    val = row["k"] if row else None
+    return round(val, 1) if val is not None else None
+
+
+def intake_averages(
+    conn: sqlite3.Connection, start: date, end: date
+) -> dict:
+    """Average logged intake per *logged* day over ``[start, end]``.
+
+    Averages across days that have food entries (not calendar days), plus
+    the count of logged days as an adherence signal. ``None`` values when
+    nothing is logged in the range.
+    """
+    row = conn.execute(
+        """
+        SELECT AVG(kcal) AS kcal, AVG(protein_g) AS protein_g,
+               AVG(carbs_g) AS carbs_g, AVG(fat_g) AS fat_g,
+               COUNT(*) AS days_logged
+        FROM (
+            SELECT date,
+                   SUM(kcal)      AS kcal,
+                   SUM(protein_g) AS protein_g,
+                   SUM(carbs_g)   AS carbs_g,
+                   SUM(fat_g)     AS fat_g
+            FROM food_log
+            WHERE date BETWEEN ? AND ?
+            GROUP BY date
+        )
+        """,
+        (start.isoformat(), end.isoformat()),
+    ).fetchone()
+
+    def _round(key: str) -> float | None:
+        v = row[key] if row else None
+        return round(v) if v is not None else None
+
+    return {
+        "avg_kcal": _round("kcal"),
+        "avg_protein_g": _round("protein_g"),
+        "avg_carbs_g": _round("carbs_g"),
+        "avg_fat_g": _round("fat_g"),
+        "days_logged": int(row["days_logged"]) if row else 0,
+    }
