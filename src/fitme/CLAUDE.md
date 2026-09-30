@@ -2,7 +2,8 @@
 
 Regras de quem mexe nos módulos Python do `src/fitme/`. O `CLAUDE.md` da raiz
 é a fonte de verdade do projeto inteiro; este arquivo só cobre o que é
-específico desta subárvore (DB, ingest, Garmin wrappers, queries).
+específico desta subárvore (DB, ingest, Garmin wrappers, Samsung Health,
+queries).
 
 ## O que vive aqui
 
@@ -22,6 +23,9 @@ src/fitme/
   openfoodfacts.py  # Cliente fino sobre a API pública do Open Food Facts.
   coach.py          # build_context() resume o DB; generate_program() (LLM) chama o Claude.
   nutrition.py      # build_context() resume o DB; generate_targets() (LLM) — coach de nutrição.
+  samsung.py        # validate_payload() + ingest_payload() — payload do Samsung Health (sem rede).
+  receiver.py       # CLI + servidor HTTP stdlib que recebe o payload do app Android.
+  samsung_import.py # CLI que ingere o mesmo payload a partir de um arquivo JSON.
 ```
 
 ## Data flow
@@ -36,10 +40,15 @@ O Garmin Connect **não** é chamado em cada render da dashboard. O modelo é:
 3. O payload Garmin completo fica gravado na coluna `raw_json` de cada
    tabela, pra versões futuras de schema poderem backfillar campos novos
    sem precisar bater de novo na API.
+4. **Samsung Health** entra por outro caminho (fase 10): não tem API web,
+   então um app Android companion lê os dados no celular e **empurra** um
+   payload JSON pro `fitme.receiver` (ou exporta um arquivo pro
+   `fitme.samsung_import`). Grava em tabelas `sh_*` próprias — ver
+   [Samsung Health](#samsung-health-samsungpy-receiverpy-samsung_importpy).
 
 ## Schema — versão atual e tabelas
 
-`SCHEMA_VERSION` atual: **6**.
+`SCHEMA_VERSION` atual: **7**.
 
 | Tabela | Chave | Fonte | Notas |
 | --- | --- | --- | --- |
@@ -57,6 +66,20 @@ O Garmin Connect **não** é chamado em cada render da dashboard. O modelo é:
 | `exercise_set` | `set_id` | manual (UI) | set de musculação atrelado a um `training_log.log_id`; `set_number` auto-incrementado por (log_id, exercise_name) |
 | `training_goal` | `goal_id` | manual (UI) | objetivo do coach (preset + dias/semana + duração); append-only, linha mais recente é a ativa (como `training_plan`) |
 | `nutrition_target` | `target_id` | LLM (Coach nutrição) | meta diária de kcal + P/C/F + rationale + adjustment; append-only, linha mais recente é a ativa (fase 9) |
+| `sh_steps_daily` | `date` | Samsung Health | passos do dia (aggregate) |
+| `sh_heart_rate_daily` | `date` | Samsung Health | min / max / avg bpm do dia |
+| `sh_sleep` | `uid` | Samsung Health | sessão de sono: total + awake / light / deep / REM em segundos, `sleep_score`; `date` = dia em que acordou (igual ao `sleep` do Garmin) |
+| `sh_body_composition` | `uid` | Samsung Health | peso, body fat %, massa muscular esquelética, músculo %, BMR, água corporal, BMI |
+| `sh_nutrition` | `uid` | Samsung Health | refeição com kcal + macros (fibra / açúcar / sódio só no `raw_json`) |
+| `sh_water` | `uid` | Samsung Health | ingestão de água em ml |
+| `sh_exercise` | `uid` | Samsung Health | exercício: tipo, duração, kcal, distância, FC média / máx |
+| `sh_sync_state` | `data_type` | `samsung.ingest_payload` | `synced_at` + `rows` do último sync por tipo — o app usa pra pedir só o delta |
+
+Tabelas `sh_*` são separadas das do Garmin de propósito: não misturar fontes
+na mesma tabela. Quem escolhe / combina a fonte é a camada de `analysis`.
+As chaveadas por `uid` têm `date` local denormalizada (derivada do
+`start_time`, ou do `end_time` no sono) + índice, então `_range` funciona
+igual às do Garmin. Todas têm `device_group`, `raw_json` e `fetched_at`.
 
 ## Schema migrations — disciplina
 
@@ -192,6 +215,38 @@ Contraparte do `coach.py` pro lado alimentar (fase 9). Mesmo split:
   Único ponto que toca rede + `ANTHROPIC_API_KEY`; falhas viram
   `NutritionError`.
 
+## Samsung Health (`samsung.py`, `receiver.py`, `samsung_import.py`)
+
+Fase 10. O contrato do payload (`schema_version: 1`, um array opcional por
+tipo) está documentado no docstring do `samsung.py`; exemplo completo em
+[`docs/samsung-payload.example.json`](../../docs/samsung-payload.example.json).
+
+- `samsung.ingest_payload(conn, payload) -> dict[str, int]` é o **único**
+  caminho de escrita nas `sh_*`. Receiver e import por arquivo chamam a
+  mesma função. Sem rede, testável com a fixture.
+- `validate_payload` só checa o envelope (objeto, `schema_version`, arrays)
+  e levanta `PayloadError` — o lote inteiro é recusado. Registro ruim
+  (sem `uid` / `start_time` / `date` válidos, ou que não é objeto) é
+  `logger.warning` + pulado; não derruba o lote. Campo numérico com tipo
+  errado vira `NULL`.
+- Uma função `_upsert_<tipo>` por array, registrada em `_UPSERTS`. Tipo
+  novo: adiciona em `DATA_TYPES`, cria a tabela numa migração, escreve o
+  `_upsert_*`, adiciona a query `sh_<tabela>_range`.
+- `start_time` / `end_time` são ISO-8601 com o offset do registro; a `date`
+  local sai deles, sem converter pra UTC.
+- Tipo ausente no payload não é tocado. Array vazio ainda carimba o
+  `sh_sync_state` (o celular olhou e não achou nada).
+- Registros apagados no Samsung Health **não** são removidos daqui — o
+  sync só faz upsert.
+- `receiver.py` é stdlib pura (`ThreadingHTTPServer`), processo separado do
+  Streamlit. `POST /samsung/sync` e `GET /samsung/status`, ambos com
+  `Authorization: Bearer $FITME_SYNC_TOKEN` (comparado com
+  `hmac.compare_digest`). Respostas: 401 token, 411 sem `Content-Length`,
+  413 corpo > `MAX_BODY_BYTES` (10 MB), 400 JSON / payload inválido. Sem
+  token configurado o servidor não sobe. Bind default é `127.0.0.1`;
+  `--host 0.0.0.0` expõe na LAN. É HTTP puro — nunca expor pra internet.
+  Cada request abre a própria conexão via `db.connect()`.
+
 ## Commands de domínio
 
 Comandos básicos de dev (`uv sync`, `streamlit run`, lint) ficam no root
@@ -209,6 +264,10 @@ Comandos básicos de dev (`uv sync`, `streamlit run`, lint) ficam no root
 | Export CSV com `raw_json` | `uv run python -m fitme.export csv --include-raw` |
 | Export subset de tabelas | `uv run python -m fitme.export csv --tables training_log,food_log` |
 | Snapshot SQLite consistente | `uv run python -m fitme.export sqlite` |
+| Receiver do Samsung Health (só local) | `uv run python -m fitme.receiver` |
+| Receiver acessível pelo celular na LAN | `uv run python -m fitme.receiver --host 0.0.0.0 --port 8765` |
+| Importar payload Samsung de arquivo | `uv run python -m fitme.samsung_import <arquivo.json>` |
+| Testar o receiver com a fixture | `curl -H "Authorization: Bearer $FITME_SYNC_TOKEN" --data-binary @docs/samsung-payload.example.json http://127.0.0.1:8765/samsung/sync` |
 
 Nomes válidos pra `--metrics`: `summary`, `heart_rate`, `sleep`, `weight`,
 `body_battery`, `stress`, `hrv`, `activities`, ou `all`.
@@ -225,6 +284,7 @@ Outputs do `fitme.export` caem em `data/exports/<utc-iso>/` (CSV) ou
 | `GARMIN_PASSWORD` | — | Idem. |
 | `GARMINTOKENS` | `~/.garminconnect` | Onde a lib `garminconnect` cacheia tokens OAuth. |
 | `ANTHROPIC_API_KEY` | — | Chave da API Anthropic. Usada só pela página Coach (programa semanal via LLM). Sem ela o resto do app funciona; só a geração fica desabilitada. |
+| `FITME_SYNC_TOKEN` | — | Token bearer do `fitme.receiver` (o app Android manda o mesmo). Só o receiver usa; sem ele o receiver não sobe. |
 
 `LOG_LEVEL` e `FITME_DB_PATH` são globais — documentadas no root.
 
@@ -237,7 +297,8 @@ Regra "nunca usar `print()`" está no root. Aqui ficam os detalhes:
   import logging
   logger = logging.getLogger(__name__)
   ```
-- Cada entry point (`app.py`, `src/fitme/login.py`, CLIs futuros) chama
+- Cada entry point (`app.py`, `login.py`, `ingest.py`, `export.py`,
+  `receiver.py`, `samsung_import.py`, CLIs futuros) chama
   `fitme.logging_config.setup()` **uma vez** antes de qualquer outro código.
   Configura formato + nível (override via `LOG_LEVEL`) e abafa o logger do
   `garminconnect` pra WARNING.

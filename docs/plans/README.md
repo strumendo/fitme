@@ -14,6 +14,7 @@ for one phase. Status is tracked in the header of each file.
 | 7 | Workout detail — sets × reps × load | done | [07-workout-detail.md](07-workout-detail.md) |
 | 8 | Training coach — LLM weekly program | in progress | [08-training-coach.md](08-training-coach.md) |
 | 9 | Nutrition coach — LLM daily targets | in progress | [09-nutrition-coach.md](09-nutrition-coach.md) |
+| 10 | Samsung Health via companion Android | in progress | [10-samsung-health.md](10-samsung-health.md) |
 
 ## Why this order
 

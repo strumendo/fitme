@@ -12,7 +12,7 @@ from typing import Callable
 
 logger = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 
 def _current_version(conn: sqlite3.Connection) -> int:
@@ -233,6 +233,115 @@ def _migrate_v6(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_v7(conn: sqlite3.Connection) -> None:
+    conn.executescript(
+        """
+        CREATE TABLE sh_steps_daily (
+            date            TEXT PRIMARY KEY,
+            steps           INTEGER,
+            device_group    TEXT,
+            raw_json        TEXT,
+            fetched_at      TEXT NOT NULL
+        );
+
+        CREATE TABLE sh_heart_rate_daily (
+            date            TEXT PRIMARY KEY,
+            min_bpm         INTEGER,
+            max_bpm         INTEGER,
+            avg_bpm         INTEGER,
+            device_group    TEXT,
+            raw_json        TEXT,
+            fetched_at      TEXT NOT NULL
+        );
+
+        CREATE TABLE sh_sleep (
+            uid             TEXT PRIMARY KEY,
+            date            TEXT NOT NULL,
+            start_time      TEXT NOT NULL,
+            end_time        TEXT NOT NULL,
+            total_seconds   INTEGER,
+            sleep_score     INTEGER,
+            awake_seconds   INTEGER,
+            light_seconds   INTEGER,
+            deep_seconds    INTEGER,
+            rem_seconds     INTEGER,
+            device_group    TEXT,
+            raw_json        TEXT,
+            fetched_at      TEXT NOT NULL
+        );
+        CREATE INDEX sh_sleep_date_idx ON sh_sleep(date);
+
+        CREATE TABLE sh_body_composition (
+            uid                     TEXT PRIMARY KEY,
+            date                    TEXT NOT NULL,
+            start_time              TEXT NOT NULL,
+            weight_kg               REAL,
+            body_fat_pct            REAL,
+            skeletal_muscle_mass_kg REAL,
+            muscle_mass_pct         REAL,
+            bmr_kcal                REAL,
+            total_body_water_l      REAL,
+            bmi                     REAL,
+            device_group            TEXT,
+            raw_json                TEXT,
+            fetched_at              TEXT NOT NULL
+        );
+        CREATE INDEX sh_body_composition_date_idx ON sh_body_composition(date);
+
+        CREATE TABLE sh_nutrition (
+            uid             TEXT PRIMARY KEY,
+            date            TEXT NOT NULL,
+            start_time      TEXT NOT NULL,
+            title           TEXT,
+            meal_type       TEXT,
+            kcal            REAL,
+            protein_g       REAL,
+            carbs_g         REAL,
+            fat_g           REAL,
+            device_group    TEXT,
+            raw_json        TEXT,
+            fetched_at      TEXT NOT NULL
+        );
+        CREATE INDEX sh_nutrition_date_idx ON sh_nutrition(date);
+
+        CREATE TABLE sh_water (
+            uid             TEXT PRIMARY KEY,
+            date            TEXT NOT NULL,
+            start_time      TEXT NOT NULL,
+            amount_ml       REAL,
+            device_group    TEXT,
+            raw_json        TEXT,
+            fetched_at      TEXT NOT NULL
+        );
+        CREATE INDEX sh_water_date_idx ON sh_water(date);
+
+        CREATE TABLE sh_exercise (
+            uid             TEXT PRIMARY KEY,
+            date            TEXT NOT NULL,
+            start_time      TEXT NOT NULL,
+            end_time        TEXT,
+            exercise_type   TEXT,
+            custom_title    TEXT,
+            duration_s      INTEGER,
+            kcal            REAL,
+            distance_m      REAL,
+            mean_hr         INTEGER,
+            max_hr          INTEGER,
+            device_group    TEXT,
+            raw_json        TEXT,
+            fetched_at      TEXT NOT NULL
+        );
+        CREATE INDEX sh_exercise_date_idx ON sh_exercise(date);
+
+        CREATE TABLE sh_sync_state (
+            data_type       TEXT PRIMARY KEY,
+            synced_at       TEXT NOT NULL,
+            rows            INTEGER NOT NULL
+        );
+        """
+    )
+
+
 _MIGRATIONS: dict[int, Callable[[sqlite3.Connection], None]] = {
     1: _migrate_v1,
     2: _migrate_v2,
@@ -240,6 +349,7 @@ _MIGRATIONS: dict[int, Callable[[sqlite3.Connection], None]] = {
     4: _migrate_v4,
     5: _migrate_v5,
     6: _migrate_v6,
+    7: _migrate_v7,
 }
 
 

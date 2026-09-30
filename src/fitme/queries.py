@@ -411,3 +411,49 @@ def intake_averages(
         "avg_fat_g": _round("fat_g"),
         "days_logged": int(row["days_logged"]) if row else 0,
     }
+
+
+def sh_steps_daily_range(
+    conn: sqlite3.Connection, start: date, end: date
+) -> list[dict]:
+    return _range(conn, "sh_steps_daily", start, end)
+
+
+def sh_heart_rate_daily_range(
+    conn: sqlite3.Connection, start: date, end: date
+) -> list[dict]:
+    return _range(conn, "sh_heart_rate_daily", start, end)
+
+
+def sh_sleep_range(conn: sqlite3.Connection, start: date, end: date) -> list[dict]:
+    return _range(conn, "sh_sleep", start, end)
+
+
+def sh_body_composition_range(
+    conn: sqlite3.Connection, start: date, end: date
+) -> list[dict]:
+    return _range(conn, "sh_body_composition", start, end)
+
+
+def sh_nutrition_range(
+    conn: sqlite3.Connection, start: date, end: date
+) -> list[dict]:
+    return _range(conn, "sh_nutrition", start, end)
+
+
+def sh_water_range(conn: sqlite3.Connection, start: date, end: date) -> list[dict]:
+    return _range(conn, "sh_water", start, end)
+
+
+def sh_exercise_range(
+    conn: sqlite3.Connection, start: date, end: date
+) -> list[dict]:
+    return _range(conn, "sh_exercise", start, end)
+
+
+def sh_sync_state(conn: sqlite3.Connection) -> list[dict]:
+    """Last Samsung Health sync per data type (``synced_at`` + rows written)."""
+    rows = conn.execute(
+        "SELECT data_type, synced_at, rows FROM sh_sync_state ORDER BY data_type"
+    ).fetchall()
+    return [dict(r) for r in rows]

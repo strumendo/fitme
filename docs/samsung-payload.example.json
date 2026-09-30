@@ -1,0 +1,85 @@
+{
+  "schema_version": 1,
+  "exported_at": "2026-09-29T08:30:00-03:00",
+  "steps_daily": [
+    {"date": "2026-09-27", "steps": 9412, "device_group": "WATCH"},
+    {"date": "2026-09-28", "steps": 11873, "device_group": "WATCH"}
+  ],
+  "heart_rate_daily": [
+    {"date": "2026-09-27", "min": 48, "max": 156, "avg": 67, "device_group": "WATCH"},
+    {"date": "2026-09-28", "min": 50, "max": 171, "avg": 71, "device_group": "WATCH"}
+  ],
+  "sleep": [
+    {
+      "uid": "sleep-0f3a9c1e",
+      "start_time": "2026-09-27T23:18:00-03:00",
+      "end_time": "2026-09-28T06:52:00-03:00",
+      "duration_s": 27240,
+      "sleep_score": 81,
+      "awake_s": 1620,
+      "light_s": 14760,
+      "deep_s": 4680,
+      "rem_s": 6180,
+      "device_group": "WATCH"
+    }
+  ],
+  "body_composition": [
+    {
+      "uid": "bodycomp-7b21d4aa",
+      "start_time": "2026-09-28T07:05:00-03:00",
+      "weight_kg": 82.4,
+      "body_fat_pct": 18.9,
+      "skeletal_muscle_mass_kg": 37.6,
+      "muscle_mass_pct": 45.6,
+      "bmr_kcal": 1812,
+      "total_body_water_l": 48.7,
+      "bmi": 25.1,
+      "device_group": "WATCH"
+    }
+  ],
+  "nutrition": [
+    {
+      "uid": "nutri-51c0e2f7",
+      "start_time": "2026-09-28T12:40:00-03:00",
+      "title": "Frango grelhado com arroz",
+      "meal_type": "LUNCH",
+      "kcal": 640,
+      "protein_g": 48,
+      "carbs_g": 70,
+      "fat_g": 16,
+      "fiber_g": 5,
+      "sugar_g": 3,
+      "sodium_mg": 720,
+      "device_group": "MOBILE"
+    }
+  ],
+  "water": [
+    {
+      "uid": "water-a94be310",
+      "start_time": "2026-09-28T09:15:00-03:00",
+      "amount_ml": 500,
+      "device_group": "MOBILE"
+    },
+    {
+      "uid": "water-c27d6f58",
+      "start_time": "2026-09-28T15:30:00-03:00",
+      "amount_ml": 350,
+      "device_group": "MOBILE"
+    }
+  ],
+  "exercise": [
+    {
+      "uid": "exercise-e6d81b02",
+      "start_time": "2026-09-28T18:02:00-03:00",
+      "end_time": "2026-09-28T18:49:00-03:00",
+      "exercise_type": "RUNNING",
+      "custom_title": null,
+      "duration_s": 2820,
+      "kcal": 512,
+      "distance_m": 7350.0,
+      "mean_hr": 148,
+      "max_hr": 171,
+      "device_group": "WATCH"
+    }
+  ]
+}
