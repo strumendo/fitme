@@ -53,8 +53,9 @@ Garmin (upsert idempotente + `raw_json`).
   trazem `device_group` e os campos do tipo:
   - `steps_daily` — `date`, `steps` (via `DataType.StepsType.TOTAL`
     agrupado DAILY; steps é só aggregate).
-  - `heart_rate_daily` — `date`, `min`, `max`, `avg` (aggregates
-    `HeartRateType.MIN/MAX` + média calculada no app).
+  - `heart_rate_daily` — `date`, `min`, `max`, `avg` (aggregates diários
+    `HeartRateType.MIN/MAX`; o SDK não agrega média, então o app calcula
+    dos pontos brutos de `HEART_RATE`).
   - `sleep` — sessão com `duration_s`, `sleep_score` e totais por estágio
     (`awake_s` / `light_s` / `deep_s` / `rem_s`) em segundos. A `date` é o
     dia em que acordou (`end_time`), igual ao `sleep` do Garmin.
@@ -91,7 +92,8 @@ Garmin (upsert idempotente + `raw_json`).
   `app/libs/` vazio + README explicando baixar o `.aar` da Samsung
   (licença não permite versionar). Telas: pedir permissões, configurar
   URL + token, "Sync agora", "Exportar JSON". `WorkManager` periódico
-  (ex.: a cada 6h, só em Wi-Fi) usa `sh_sync_state` pra pedir o delta.
+  (a cada 6h, só em Wi-Fi) usa `sh_sync_state` pra pedir o delta. Export
+  JSON cobre sempre os últimos 30 dias.
 
 **Out (deferred):**
 - Escrever dados no Samsung Health (exige parceria).
@@ -115,13 +117,23 @@ Garmin (upsert idempotente + `raw_json`).
 
 ### Lado Android
 
+- Todo acesso ao SDK fica em `SamsungHealthReader.kt`. O resto do app
+  (payload, janela, HTTP, worker, UI) não importa o SDK.
 - `HealthDataService.getStore(context)`; permissões
   `Permission.of(DataTypes.X, AccessType.READ)` via
-  `getGrantedPermissions` / `requestPermissions`.
+  `getGrantedPermissions` / `requestPermissions` (suspend). Samsung Health
+  ausente ou velho vem como `ResolvablePlatformException` →
+  `resolve(activity)`.
 - Leitura com `DataTypes.X.readDataRequestBuilder` +
-  `LocalTimeFilter.of(start, end)`; passos/FC diários com
-  `DataType.StepsType.TOTAL.requestBuilder` / `HeartRateType.MIN|MAX` +
-  `LocalTimeGroup` DAILY.
+  `LocalTimeFilter.of(start, end)`, seguindo `pageToken`. Passos diários
+  com `DataType.StepsType.TOTAL.requestBuilder` + `LocalTimeGroup` DAILY;
+  FC `HeartRateType.MIN|MAX` usa `LocalDateFilter` + `LocalDateGroup`
+  DAILY. `device_group` sai de `dataSource.deviceId` →
+  `DeviceManager.getDevice` → `DeviceGroup`.
+- Janela de leitura: dia do último `synced_at` menos 2 dias; primeiro sync
+  volta 90 dias.
+- Gradle segue o codelab da Samsung: `.aar` em `app/libs/` + `gson` +
+  plugin `kotlin-parcelize`.
 - Serialização com kotlinx.serialization pro contrato acima; POST via
   OkHttp.
 - **Não dá pra compilar/testar no ambiente de dev do fitme** (sem Android
@@ -133,7 +145,7 @@ Garmin (upsert idempotente + `raw_json`).
 1. **PR 1 — contrato + schema + ingest, sem Android (feito).** Schema v7,
    `samsung.py`, `receiver.py`, `samsung_import`, queries, fixture JSON de
    exemplo, docs. Testável com `curl` + fixture.
-2. **PR 2 — app Android.** Projeto `android/`, permissões, leitura dos 7
+2. **PR 2 — app Android (código escrito, falta rodar no celular).** Projeto `android/`, permissões, leitura dos 7
    tipos, sync HTTP + export de arquivo, WorkManager.
 3. **PR 3 — UI.** Seletor de fonte no Trends, Samsung no Food/Activities,
    página de sync.
@@ -170,14 +182,17 @@ Garmin (upsert idempotente + `raw_json`).
 
 ## Open questions
 
-- **Nomes exatos no SDK.** `DataTypes.BODY_COMPOSITION`, `NUTRITION`,
-  `WATER_INTAKE` e os campos de cada tipo vieram de resumos da referência
-  da API. Conferir no KDoc do `.aar` no PR 2.
-- **Delta de sync.** `readChanges()` do SDK vs janela por `LocalTimeFilter`
-  desde o último sync (com margem de 2 dias pra edições tardias).
-  Começar pela janela, que é mais simples. Registros apagados no Samsung
-  Health não somem do fitme (o ingest só faz upsert) — `readChanges()`
-  resolveria isso.
+- **Build real.** O código foi escrito com os nomes conferidos na
+  referência da API do SDK 1.1.0, mas não foi compilado (sem JDK/SDK no
+  ambiente de dev). O primeiro build no Android Studio pode pedir ajustes
+  finos, como tipos genéricos dos builders ou getters vs propriedades
+  Kotlin.
+- **Background.** Não está confirmado que o SDK lê com o app em
+  background (WorkManager). Se falhar, o sync automático vira só
+  "Sync agora" + export.
+- **Registros apagados.** O delta é por janela (`LocalTimeFilter` desde o
+  último sync − 2 dias). Registros apagados no Samsung Health não somem do
+  fitme (o ingest só faz upsert); `readChanges()` do SDK resolveria isso.
 - **Fonte preferida por métrica.** Default Garmin pra sono/FC/passos,
   Samsung pra composição corporal? Decidir no PR 3 com dados reais.
 - **Nutrição Samsung × `food_log`.** Só leitura, ou importar pro

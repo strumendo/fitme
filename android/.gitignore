@@ -1,0 +1,10 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+# Samsung's license doesn't allow redistributing the SDK — download it locally.
+app/libs/*.aar

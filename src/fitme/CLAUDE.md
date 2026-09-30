@@ -220,6 +220,8 @@ Contraparte do `coach.py` pro lado alimentar (fase 9). Mesmo split:
 Fase 10. O contrato do payload (`schema_version: 1`, um array opcional por
 tipo) está documentado no docstring do `samsung.py`; exemplo completo em
 [`docs/samsung-payload.example.json`](../../docs/samsung-payload.example.json).
+O lado que produz o payload é o app em [`android/`](../../android/CLAUDE.md)
+(`Payload.kt`); mudança no contrato mexe nos dois no mesmo PR.
 
 - `samsung.ingest_payload(conn, payload) -> dict[str, int]` é o **único**
   caminho de escrita nas `sh_*`. Receiver e import por arquivo chamam a

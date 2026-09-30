@@ -27,6 +27,7 @@ desenvolvedor: o dono do repo.
 app.py                  # Landing — "Today"
 pages/                  # Páginas extras — ver pages/CLAUDE.md
 src/fitme/              # Pacote principal — ver src/fitme/CLAUDE.md
+android/                # App companion Samsung Health (Kotlin) — ver android/CLAUDE.md
 data/                   # gitignored — DB SQLite mora aqui
 docs/plans/             # Roadmap por fase — ver docs/plans/CLAUDE.md
 .env.example            # Template; copia pra .env localmente
@@ -112,5 +113,8 @@ contexto em
   comandos de domínio, env vars de Garmin / Samsung.
 - [`pages/CLAUDE.md`](pages/CLAUDE.md) — convenções de páginas Streamlit,
   receita de adicionar chart no Trends, pattern de range picker.
+- [`android/CLAUDE.md`](android/CLAUDE.md) — app Android companion: SDK
+  Samsung isolado, contrato do payload espelhado, não compila no ambiente
+  de dev.
 - [`docs/plans/CLAUDE.md`](docs/plans/CLAUDE.md) — regras pra arquivos de
   roadmap (status, formato, cross-references).
