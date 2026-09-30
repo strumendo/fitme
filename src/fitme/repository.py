@@ -302,3 +302,35 @@ def insert_training_goal(
         (goal_preset, days_per_week, session_length_min, _now_iso()),
     )
     return cur.lastrowid or 0
+
+
+# ---------------------------------------------------------------------------
+# nutrition_target
+# ---------------------------------------------------------------------------
+
+def insert_nutrition_target(
+    conn: sqlite3.Connection,
+    *,
+    kcal: int | None = None,
+    protein_g: int | None = None,
+    carbs_g: int | None = None,
+    fat_g: int | None = None,
+    rationale: str | None = None,
+    adjustment: str | None = None,
+) -> int:
+    """Record a nutrition target. The latest row is the active target.
+
+    Append-only like ``training_goal``: re-generating inserts a new row, so
+    the adjustment history (and the rationale behind each recalibration)
+    stays on record.
+    """
+    cur = conn.execute(
+        """
+        INSERT INTO nutrition_target
+            (kcal, protein_g, carbs_g, fat_g, rationale, adjustment,
+             created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (kcal, protein_g, carbs_g, fat_g, rationale, adjustment, _now_iso()),
+    )
+    return cur.lastrowid or 0
