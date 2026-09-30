@@ -14,6 +14,9 @@ desenvolvedor: o dono do repo.
 - Streamlit como UI (`app.py` é a landing).
 - SQLite local em `data/fitme.db` como source of truth do dashboard.
 - `garminconnect` (PyPI) como fonte de dados; `python-dotenv` pra `.env`.
+- Samsung Health como segunda fonte: um app Android companion empurra um
+  payload JSON pro `fitme.receiver` (servidor stdlib, processo à parte) ou
+  exporta arquivo pro `fitme.samsung_import`. Tabelas `sh_*` próprias.
 - `pandas` só no caminho UI (analysis + pages), nunca em `queries.py`.
 - `anthropic` (SDK Claude) só no `coach.py` — gera o programa semanal na
   página Coach. Requer `ANTHROPIC_API_KEY`; sem ela só o Coach desabilita.
@@ -93,7 +96,8 @@ Doc desatualizada é tratada como código quebrado.
 
 ## Environment variables — visão geral
 
-Só duas vars são realmente globais. As de Garmin / DB têm contexto em
+Só duas vars são realmente globais. As de Garmin / Samsung / Coach têm
+contexto em
 [`src/fitme/CLAUDE.md`](src/fitme/CLAUDE.md#environment-variables).
 
 | Var | Default | Pra que serve |
@@ -104,8 +108,8 @@ Só duas vars são realmente globais. As de Garmin / DB têm contexto em
 ## Sub-CLAUDE.md neste repo
 
 - [`src/fitme/CLAUDE.md`](src/fitme/CLAUDE.md) — schema, migrations, ingest,
-  queries, Garmin wrappers + auth flow, comandos de domínio, env vars de
-  Garmin.
+  queries, Garmin wrappers + auth flow, Samsung Health (payload + receiver),
+  comandos de domínio, env vars de Garmin / Samsung.
 - [`pages/CLAUDE.md`](pages/CLAUDE.md) — convenções de páginas Streamlit,
   receita de adicionar chart no Trends, pattern de range picker.
 - [`docs/plans/CLAUDE.md`](docs/plans/CLAUDE.md) — regras pra arquivos de

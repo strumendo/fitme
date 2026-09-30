@@ -18,6 +18,7 @@ class Settings:
     garmin_tokens_path: Path
     db_path: Path
     anthropic_api_key: str | None
+    sync_token: str | None
 
 
 def load() -> Settings:
@@ -32,4 +33,5 @@ def load() -> Settings:
         garmin_tokens_path=Path(tokens).expanduser(),
         db_path=db,
         anthropic_api_key=os.getenv("ANTHROPIC_API_KEY"),
+        sync_token=os.getenv("FITME_SYNC_TOKEN") or None,
     )
